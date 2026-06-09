@@ -26,7 +26,6 @@ function getSheet(name) {
     sheet = ss.insertSheet(name);
     if (name === SHEETS.config) {
       sheet.appendRow(['key', 'value']);
-      sheet.appendRow(['password', 'exam2026']);
       sheet.appendRow(['version', '1学期 中間テスト']);
       sheet.appendRow(['versionLabel', '2026年度']);
     } else if (name === SHEETS.subjects) {
@@ -55,25 +54,6 @@ function sheetToObjects(sheet) {
   return result;
 }
 
-// ---- Auth ----
-function generateToken() {
-  return Utilities.getUuid() + ':' + new Date().getTime();
-}
-
-function verifyToken(token) {
-  if (!token) return false;
-  const props = PropertiesService.getScriptProperties();
-  const stored = props.getProperty('session_' + token);
-  if (!stored) return false;
-  const parts = stored.split(':');
-  const expiry = parseInt(parts[0]);
-  if (new Date().getTime() > expiry) {
-    props.deleteProperty('session_' + token);
-    return false;
-  }
-  return true;
-}
-
 // ---- GET handlers ----
 function doGet(e) {
   try {
@@ -91,13 +71,7 @@ function doGet(e) {
           result = getSubjects(e.parameter.course, e.parameter.version);
           break;
         case 'getSuggestions':
-          if (!verifyToken(e.parameter.token)) {
-            throw new Error('認証が必要です');
-          }
           result = getSuggestionsData();
-          break;
-        case 'checkAuth':
-          result = { valid: verifyToken(e.parameter.token) };
           break;
         case 'getVersions':
           result = getVersions();
@@ -166,43 +140,31 @@ function doPost(e) {
       case 'addSuggestion':
         result = addSuggestion(params.data);
         break;
-      case 'verifyPassword':
-        result = verifyPassword();
-        break;
       case 'approveSuggestion':
-        if (!verifyToken(params.token)) throw new Error('認証が必要です');
         result = approveSuggestion(params.id);
         break;
       case 'rejectSuggestion':
-        if (!verifyToken(params.token)) throw new Error('認証が必要です');
         result = rejectSuggestion(params.id);
         break;
       case 'updateVersion':
-        if (!verifyToken(params.token)) throw new Error('認証が必要です');
         result = updateVersion(params.version);
         break;
       case 'updateSubjects':
-        if (!verifyToken(params.token)) throw new Error('認証が必要です');
         result = updateSubjects(params.course, params.subjects);
         break;
       case 'addScheduleEntry':
-        if (!verifyToken(params.token)) throw new Error('認証が必要です');
         result = addScheduleEntry(params.data);
         break;
       case 'updateScheduleEntry':
-        if (!verifyToken(params.token)) throw new Error('認証が必要です');
         result = updateScheduleEntry(params.rowIndex);
         break;
       case 'deleteScheduleEntry':
-        if (!verifyToken(params.token)) throw new Error('認証が必要です');
         result = deleteScheduleEntry(params.rowIndex);
         break;
       case 'replaceSchedule':
-        if (!verifyToken(params.token)) throw new Error('認証が必要です');
         result = replaceSchedule(params.version, params.course, params.rows);
         break;
       case 'updateConfig':
-        if (!verifyToken(params.token)) throw new Error('認証が必要です');
         result = updateConfig(params.key, params.value);
         break;
       default:
@@ -404,14 +366,6 @@ function rejectSuggestion(id) {
 }
 
 // ---- Admin ----
-function verifyPassword() {
-  const token = generateToken();
-  const props = PropertiesService.getScriptProperties();
-  const expiry = new Date().getTime() + 2 * 60 * 60 * 1000;
-  props.setProperty('session_' + token, expiry + ':admin');
-  return { token, expiresIn: 7200 };
-}
-
 // ---- Schedule CRUD (Admin) ----
 function replaceSchedule(version, course, rows) {
   const sheet = getSheet(SHEETS.schedule);
@@ -501,7 +455,6 @@ function setupInitialData() {
   if (!sheet) {
     sheet = ss.insertSheet(SHEETS.config);
     sheet.appendRow(['key', 'value']);
-    sheet.appendRow(['password', 'exam2026']);
     sheet.appendRow(['version', '1学期 中間テスト']);
     sheet.appendRow(['versionLabel', '2026年度']);
   }
@@ -585,26 +538,7 @@ const ADMIN_BODY = '  <!-- Header -->\n\
       </div>\n\
     </div>\n\
   </header>\n\
-  <!-- Auth Guard -->\n\
-  <div class="auth-guard" id="authGuard">\n\
-    <div class="modal-card password-modal" style="max-width:380px; margin:0 16px;">\n\
-      <div class="modal-title">🔑</div>\n\
-      <div class="modal-title" style="font-size:1rem; margin-top:8px;">管理者認証</div>\n\
-      <div class="modal-subtitle">パスワードを入力してください</div>\n\
-      <form id="passwordForm" novalidate>\n\
-        <div class="form-group">\n\
-          <input class="form-input" type="password" id="passwordInput" placeholder="パスワード" required autocomplete="off">\n\
-        </div>\n\
-        <div class="error-box hidden" id="authError">\n\
-          <span>⚠️</span>\n\
-          <span id="authErrorMessage"></span>\n\
-        </div>\n\
-        <button type="submit" class="btn btn-primary btn-full">ログイン</button>\n\
-      </form>\n\
-    </div>\n\
-  </div>\n\
-  <!-- Admin Content -->\n\
-  <main class="container admin-content" id="adminContent">\n\
+  <main class="container admin-content">\n\
     <div class="admin-panel">\n\
       <div class="admin-card">\n\
         <h3>📌 バージョン管理</h3>\n\
@@ -681,7 +615,6 @@ const INDEX_BODY = '  <!-- Header -->\n\
     <div class="menu-divider"></div>\n\
     <button class="menu-item" data-action="exportCalendar"><span class="menu-icon">📅</span> カレンダーに追加 (.ics)</button>\n\
     <a class="menu-item" href="?page=suggest"><span class="menu-icon">💡</span> 変更点を提案</a>\n\
-    <a class="menu-item" href="?page=admin"><span class="menu-icon">⚙️</span> 管理者画面</a>\n\
   </div>\n\
   <main class="container" id="mainContent">\n\
     <div class="info-card" id="topSection">\n\

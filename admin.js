@@ -1,14 +1,12 @@
 /* ============================================================
    設定
    ============================================================ */
-const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwyMH36EV3htpKMhEVgsnvXUPn_lNIo8VGdwoo647s6hk4ug7IjnbHcmUr-TrqIVfxt/exec';
-const ADMIN_PASSWORD = 'exam2026';
+const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwIbsoEIAt4K0gHyqLPEEgpWQ71srLvYla5cVYW_N6uDl02y2umFRt2UyGKdE3VJFuR/exec';
 
 /* ============================================================
    State
    ============================================================ */
 let state = {
-  token: null,
   config: null,
   suggestions: [],
   versions: [],
@@ -51,56 +49,6 @@ function apiFetch(action, params = {}) {
 }
 
 /* ============================================================
-   Auth
-   ============================================================ */
-function getToken() {
-  return sessionStorage.getItem('admin_token');
-}
-
-function setToken(token) {
-  sessionStorage.setItem('admin_token', token);
-}
-
-async function checkAuth() {
-  const token = getToken();
-  if (!token) return false;
-  try {
-    const res = await apiFetch('checkAuth', { token });
-    return res.success && res.data.valid === true;
-  } catch {
-    return false;
-  }
-}
-
-async function login(password) {
-  if (password !== ADMIN_PASSWORD) throw new Error('パスワードが正しくありません');
-  const res = await apiPost({ action: 'verifyPassword' });
-  if (!res.success) throw new Error(res.error);
-  setToken(res.data.token);
-  state.token = res.data.token;
-  return true;
-}
-
-function logout() {
-  sessionStorage.removeItem('admin_token');
-  state.token = null;
-  showAuthGuard();
-}
-
-/* ============================================================
-   UI - Auth Guard
-   ============================================================ */
-function showAdminContent() {
-  hide($('#authGuard'));
-  $('#adminContent').classList.add('active');
-}
-
-function showAuthGuard() {
-  show($('#authGuard'));
-  $('#adminContent').classList.remove('active');
-}
-
-/* ============================================================
    Version Management
    ============================================================ */
 async function loadVersions() {
@@ -136,7 +84,7 @@ async function updateVersion() {
 
   try {
     const res = await apiPost({
-      action: 'updateVersion', version: newVersion, token: getToken()
+      action: 'updateVersion', version: newVersion
     });
     if (!res.success) throw new Error(res.error);
 
@@ -145,7 +93,7 @@ async function updateVersion() {
     $('#editVersionSelect').value = newVersion;
     toast('「' + newVersion + '」を反映しました');
   } catch (err) {
-    handleAuthError(err);
+    toast('処理に失敗しました');
   }
 }
 
@@ -154,14 +102,14 @@ function addNewVersion() {
   if (!name || !name.trim()) return;
 
   apiPost({
-    action: 'updateVersion', version: name.trim(), token: getToken()
+    action: 'updateVersion', version: name.trim()
   }).then(res => {
     if (!res.success) throw new Error(res.error);
     state.config.version = name.trim();
     $('#currentVersion').textContent = name.trim();
     loadVersions();
     toast('「' + name.trim() + '」を作成しました');
-  }).catch(err => handleAuthError(err));
+  }).catch(() => toast('処理に失敗しました'));
 }
 
 /* ============================================================
@@ -239,7 +187,6 @@ function addEmptyRow() {
 }
 
 async function saveSchedule() {
-  const token = getToken();
   const version = state.editVersion;
   const course = state.editCourse;
   if (!version) { toast('バージョンを選択してください'); return; }
@@ -265,13 +212,13 @@ async function saveSchedule() {
   try {
     const res = await apiPost({
       action: 'replaceSchedule',
-      version, course, rows, token
+      version, course, rows
     });
     if (!res.success) throw new Error(res.error);
     toast('保存しました (' + (res.data ? res.data.inserted : rows.length) + '件)');
     loadScheduleForEdit();
   } catch (err) {
-    handleAuthError(err);
+    toast('保存に失敗しました');
   }
 }
 
@@ -297,15 +244,14 @@ async function loadSuggestions() {
   show(loading);
 
   try {
-    const res = await apiFetch('getSuggestions', { token: getToken() });
+    const res = await apiFetch('getSuggestions');
     if (!res.success) throw new Error(res.error);
 
     state.suggestions = res.data || [];
     renderSuggestions();
 
   } catch (err) {
-    if (err.message.includes('認証')) { logout(); toast('認証が切れました'); }
-    else { list.innerHTML = '<div class="empty-state"><p>読み込みに失敗しました</p></div>'; }
+    list.innerHTML = '<div class="empty-state"><p>読み込みに失敗しました</p></div>';
   } finally {
     hide(loading);
   }
@@ -396,25 +342,13 @@ async function handleSuggestion(id, action) {
   try {
     const res = await apiPost({
       action: action === 'approve' ? 'approveSuggestion' : 'rejectSuggestion',
-      id: parseInt(id), token: getToken()
+      id: parseInt(id)
     });
     if (!res.success) throw new Error(res.error);
     toast(action === 'approve' ? '提案を承認しました' : '提案を却下しました');
     loadSuggestions();
   } catch (err) {
-    handleAuthError(err);
-  }
-}
-
-/* ============================================================
-   Error handling
-   ============================================================ */
-function handleAuthError(err) {
-  if (err.message && err.message.includes('認証')) {
-    logout();
-    toast('認証が切れました。再ログインしてください');
-  } else {
-    toast('処理に失敗: ' + (err.message || ''));
+    toast('処理に失敗しました');
   }
 }
 
@@ -433,35 +367,17 @@ function escAttr(str) {
 /* ============================================================
    Init
    ============================================================ */
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
 
   $('#backBtn').addEventListener('click', () => history.back());
 
-  // Password form
-  $('#passwordForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const password = $('#passwordInput').value;
-    hide($('#authError'));
-    try {
-      await login(password);
-      showAdminContent();
-      initializeAdmin();
-    } catch (err) {
-      show($('#authError'));
-      $('#authErrorMessage').textContent = err.message || 'パスワードが違います';
-    }
-  });
-
-  // Version controls
   $('#updateVersionBtn').addEventListener('click', updateVersion);
   $('#addVersionBtn').addEventListener('click', addNewVersion);
 
-  // Schedule editor
   $('#loadScheduleBtn').addEventListener('click', loadScheduleForEdit);
   $('#addEntryBtn').addEventListener('click', addEmptyRow);
   $('#saveScheduleBtn').addEventListener('click', saveSchedule);
 
-  // Suggestion tab filters
   $('#sugTabBar').addEventListener('click', (e) => {
     const btn = e.target.closest('.tab-btn');
     if (!btn) return;
@@ -471,15 +387,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderSuggestions();
   });
 
-  // Check existing auth
-  const valid = await checkAuth();
-  if (valid) {
-    state.token = getToken();
-    showAdminContent();
-    initializeAdmin();
-  } else {
-    showAuthGuard();
-  }
+  initializeAdmin();
 });
 
 async function initializeAdmin() {

@@ -1,7 +1,7 @@
 /* ============================================================
    設定
    ============================================================ */
-const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwyMH36EV3htpKMhEVgsnvXUPn_lNIo8VGdwoo647s6hk4ug7IjnbHcmUr-TrqIVfxt/exec';
+const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwIbsoEIAt4K0gHyqLPEEgpWQ71srLvYla5cVYW_N6uDl02y2umFRt2UyGKdE3VJFuR/exec';
 
 /* ============================================================
    Utility
