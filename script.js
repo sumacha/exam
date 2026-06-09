@@ -1,7 +1,7 @@
 /* ============================================================
    設定
    ============================================================ */
-const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbzDxKt3ez-h-HfblvMNLcEcP3ZJr1sUVCoAE7kfP8qMfjdAQBxr5lnaPgsiYnIcLSaD/exec';
+const API_BASE_URL = 'https://script.google.com/macros/s/AKfycby-FF_3BI8QaXH0dhB90gVwy5H-slBySlel8R2QUe0nY6x37CYp5qhvIQi_I3c4FwUuKg/exec';
 
 const STORAGE_KEYS = {
   course: 'exam_course_selected',
@@ -121,9 +121,12 @@ async function loadData() {
     if (!configRes.success) throw new Error(configRes.error);
     state.config = configRes.data;
 
+    const useCourseSchedule = configRes.data.useCourseSchedule !== 'false';
+    const scheduleParams = { version: configRes.data.version };
+    if (useCourseSchedule) scheduleParams.course = state.course;
     const [subjectsRes, scheduleRes] = await Promise.all([
       apiFetch('getSubjects', { course: state.course, version: configRes.data.version }),
-      apiFetch('getSchedule', { version: configRes.data.version, course: state.course })
+      apiFetch('getSchedule', scheduleParams)
     ]);
     if (!subjectsRes.success) throw new Error(subjectsRes.error);
     if (!scheduleRes.success) throw new Error(scheduleRes.error);
@@ -146,7 +149,6 @@ async function loadData() {
     renderSchedule();
     renderSubjectProgress();
     renderCountdown();
-    updateTimerSubjects();
     updateProgressUI();
     updateLastUpdated();
 
@@ -318,6 +320,9 @@ function initMenu() {
     } else if (item.dataset.action === 'toggleDarkMode') {
       closeMenu();
       toggleDarkMode();
+    } else if (item.dataset.action === 'openTimer') {
+      closeMenu();
+      openTimerModal();
     } else if (item.dataset.action === 'scrollTo') {
       closeMenu();
       const target = document.getElementById(item.dataset.target);
@@ -448,11 +453,11 @@ function renderSubjectProgress() {
 }
 
 /* ============================================================
-   Study Timer (Pomodoro)
+   Study Timer (Pomodoro) - Modal Popup
    ============================================================ */
 const TIMER_PREFIX = 'exam_timer_';
-const FOCUS_SEC = 25 * 60;
-const BREAK_SEC = 5 * 60;
+let FOCUS_SEC = 25 * 60;
+let BREAK_SEC = 5 * 60;
 
 const timer = {
   mode: 'focus',
@@ -465,14 +470,59 @@ const timer = {
 
 const CIRCUMFERENCE = 490.09;
 
-function initTimer() {
+function openTimerModal() {
+  const modal = $('#timerModal');
+  modal.classList.remove('hidden');
   updateTimerSubjects();
+  updateTimerStats();
+  resetTimer();
+  applyTimerDuration();
+}
+
+function closeTimerModal() {
+  pauseTimer();
+  $('#timerModal').classList.add('hidden');
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  }
+}
+
+function applyTimerDuration() {
+  const focusMin = parseInt($('#timerFocusMin').value) || 25;
+  const breakMin = parseInt($('#timerBreakMin').value) || 5;
+  FOCUS_SEC = Math.max(1, Math.min(120, focusMin)) * 60;
+  BREAK_SEC = Math.max(1, Math.min(30, breakMin)) * 60;
+  if (!timer.running) resetTimer();
+}
+
+function initTimer() {
   $('#timerToggleBtn').addEventListener('click', toggleTimer);
   $('#timerResetBtn').addEventListener('click', resetTimer);
+  $('#timerCloseBtn').addEventListener('click', closeTimerModal);
+  $('#timerFullscreenBtn').addEventListener('click', toggleTimerFullscreen);
   $('#timerSubject').addEventListener('change', e => {
     timer.subject = e.target.value;
     if (!timer.running) resetTimer();
   });
+  $('#timerFocusMin').addEventListener('change', applyTimerDuration);
+  $('#timerBreakMin').addEventListener('change', applyTimerDuration);
+  $('#timerModal').addEventListener('click', e => {
+    if (e.target === $('#timerModal')) closeTimerModal();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !$('#timerModal').classList.contains('hidden')) {
+      closeTimerModal();
+    }
+  });
+}
+
+function toggleTimerFullscreen() {
+  const modal = $('#timerModal');
+  if (!document.fullscreenElement) {
+    modal.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen();
+  }
 }
 
 function updateTimerSubjects() {
@@ -537,7 +587,7 @@ function tick() {
       timer.left = BREAK_SEC;
       $('#timerRing').className = 'timer-progress-ring break';
       $('#timerModeLabel').textContent = '☕ 休憩';
-      toast('お疲れ様です！5分間の休憩です');
+      toast('お疲れ様です！' + Math.round(BREAK_SEC / 60) + '分間の休憩です');
     } else {
       timer.mode = 'focus';
       timer.left = FOCUS_SEC;
@@ -558,7 +608,8 @@ function updateTimerDisplay() {
 }
 
 function updateTimerRing() {
-  const offset = CIRCUMFERENCE * (1 - timer.left / (timer.mode === 'focus' ? FOCUS_SEC : BREAK_SEC));
+  const total = timer.mode === 'focus' ? FOCUS_SEC : BREAK_SEC;
+  const offset = CIRCUMFERENCE * (1 - timer.left / total);
   $('#timerProgressCircle').setAttribute('stroke-dashoffset', offset);
 }
 
@@ -667,6 +718,5 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#resetProgressBtn').addEventListener('click', resetProgress);
 
   initTimer();
-  updateTimerStats();
   initCourseSelection();
 });

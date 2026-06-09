@@ -1,7 +1,7 @@
 /* ============================================================
    設定
    ============================================================ */
-const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbzDxKt3ez-h-HfblvMNLcEcP3ZJr1sUVCoAE7kfP8qMfjdAQBxr5lnaPgsiYnIcLSaD/exec';
+const API_BASE_URL = 'https://script.google.com/macros/s/AKfycby-FF_3BI8QaXH0dhB90gVwy5H-slBySlel8R2QUe0nY6x37CYp5qhvIQi_I3c4FwUuKg/exec';
 
 /* ============================================================
    Utility
@@ -77,11 +77,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const period = $('#sugPeriod').value.trim();
     const scope = $('#sugScope').value.trim();
     const notes = type === 'submission' ? $('#sugSubNotes').value.trim() : $('#sugNotes').value.trim();
-    const reason = $('#sugReason').value.trim();
 
-    if (!version || !course || !subject || !reason) {
+    if (!version || !course || !subject) {
       show($('#errorBox'));
-      $('#errorMessage').textContent = '定期テスト、コース、教科、変更理由は必須です';
+      $('#errorMessage').textContent = '定期テスト、コース、教科は必須です';
       return;
     }
     if (type === 'submission' && !notes) {
@@ -97,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const res = await apiPost({
         action: 'addSuggestion',
-        data: { type, version, course, subject, date, period, scope, notes, reason }
+        data: { type, version, course, subject, date, period, scope, notes }
       });
 
       if (!res.success) throw new Error(res.error);

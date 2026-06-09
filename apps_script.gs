@@ -26,7 +26,7 @@ function getSheet(name) {
     sheet = ss.insertSheet(name);
     if (name === SHEETS.config) {
       sheet.appendRow(['key', 'value']);
-      sheet.appendRow(['password', 'admin123']);
+      sheet.appendRow(['password', 'exam2026']);
       sheet.appendRow(['version', '1学期 中間テスト']);
       sheet.appendRow(['versionLabel', '2026年度']);
     } else if (name === SHEETS.subjects) {
@@ -155,6 +155,10 @@ function doPost(e) {
         if (!verifyToken(params.token)) throw new Error('認証が必要です');
         result = replaceSchedule(params.version, params.course, params.rows);
         break;
+      case 'updateConfig':
+        if (!verifyToken(params.token)) throw new Error('認証が必要です');
+        result = updateConfig(params.key, params.value);
+        break;
       default:
         throw new Error('Unknown action: ' + action);
     }
@@ -206,6 +210,16 @@ function getSchedule(version, course) {
     if (course && row.course !== course) return false;
     return true;
   });
+}
+
+// Get config value for useCourseSchedule
+function getUseCourseSchedule() {
+  try {
+    const config = getConfig();
+    return config.useCourseSchedule !== 'false';
+  } catch (e) {
+    return true;
+  }
 }
 
 // ---- Subjects ----
@@ -288,7 +302,7 @@ function addSuggestion(data) {
     data.period || '',
     data.scope || '',
     data.notes || '',
-    data.reason || '',
+    '',
     '承認待ち',
     now
   ]);
@@ -356,7 +370,7 @@ function rejectSuggestion(id) {
 // ---- Admin ----
 function verifyPassword(password) {
   const config = getConfig();
-  const stored = config.password || 'admin123';
+  const stored = config.password || 'exam2026';
   if (password === stored) {
     const token = generateToken();
     const props = PropertiesService.getScriptProperties();
@@ -436,6 +450,18 @@ function updateVersion(version) {
   return { version };
 }
 
+function updateConfig(key, value) {
+  const sheet = getSheet(SHEETS.config);
+  const data = sheetToObjects(sheet);
+  const rowIndex = data.findIndex(r => r.key === key);
+  if (rowIndex >= 0) {
+    sheet.getRange(rowIndex + 2, 2).setValue(value);
+  } else {
+    sheet.appendRow([key, value]);
+  }
+  return { key, value };
+}
+
 // ---- Test / Setup helper ----
 function setupInitialData() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -445,7 +471,7 @@ function setupInitialData() {
   if (!sheet) {
     sheet = ss.insertSheet(SHEETS.config);
     sheet.appendRow(['key', 'value']);
-    sheet.appendRow(['password', 'admin123']);
+    sheet.appendRow(['password', 'exam2026']);
     sheet.appendRow(['version', '1学期 中間テスト']);
     sheet.appendRow(['versionLabel', '2026年度']);
   }

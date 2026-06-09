@@ -241,7 +241,6 @@ a:hover {
 #topSection,
 #countdownCard,
 #topProgressCard,
-#timerCard,
 #scheduleCard {
   scroll-margin-top: 64px;
 }
@@ -903,19 +902,6 @@ body.dark .badge-version {
 .suggestion-item .sug-body strong {
   color: var(--gray-700);
 }
-.suggestion-item .sug-reason {
-  background: var(--gray-50);
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  font-size: 0.82rem;
-  color: var(--gray-500);
-  margin-bottom: 10px;
-}
-.suggestion-item .sug-reason::before {
-  content: '理由: ';
-  font-weight: 600;
-  color: var(--gray-600);
-}
 .suggestion-item .sug-actions {
   display: flex;
   gap: 8px;
@@ -1097,6 +1083,65 @@ body.dark .badge-version {
 }
 .subj-progress-item .progress-bar-fill {
   background: var(--primary);
+}
+
+/* ============================================================
+   Timer Modal
+   ============================================================ */
+.timer-modal-card {
+  max-width: 420px;
+  padding: 24px;
+}
+.timer-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.timer-modal-actions {
+  display: flex;
+  gap: 4px;
+}
+.timer-duration-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.duration-label {
+  font-size: 0.78rem;
+  color: var(--gray-500);
+  font-weight: 600;
+}
+.duration-input {
+  width: 56px !important;
+  padding: 4px 6px !important;
+  text-align: center;
+  font-size: 0.85rem;
+}
+.duration-unit {
+  font-size: 0.78rem;
+  color: var(--gray-400);
+  margin-right: 8px;
+}
+.timer-modal-card .timer-display {
+  font-size: 3rem;
+}
+.timer-modal-card .timer-progress-ring {
+  width: 150px;
+  height: 150px;
+}
+.timer-modal-card .timer-progress-ring svg {
+  width: 150px;
+  height: 150px;
+}
+.timer-modal-card .timer-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 8px;
 }
 
 /* ============================================================

@@ -1,7 +1,7 @@
 /* ============================================================
    設定
    ============================================================ */
-const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbzDxKt3ez-h-HfblvMNLcEcP3ZJr1sUVCoAE7kfP8qMfjdAQBxr5lnaPgsiYnIcLSaD/exec';
+const API_BASE_URL = 'https://script.google.com/macros/s/AKfycby-FF_3BI8QaXH0dhB90gVwy5H-slBySlel8R2QUe0nY6x37CYp5qhvIQi_I3c4FwUuKg/exec';
 
 /* ============================================================
    State
@@ -14,7 +14,8 @@ let state = {
   scheduleData: [],
   editVersion: '',
   editCourse: 'K/文系',
-  filterType: 'all'
+  filterType: 'all',
+  useCourseSchedule: true
 };
 
 /* ============================================================
@@ -174,7 +175,9 @@ async function loadScheduleForEdit() {
   state.editCourse = course;
 
   try {
-    const res = await apiFetch('getSchedule', { version, course });
+    const params = { version };
+    if (state.useCourseSchedule) params.course = course;
+    const res = await apiFetch('getSchedule', params);
     if (!res.success) throw new Error(res.error);
     state.scheduleData = (res.data || []).map((row, i) => ({ ...row, _editId: i }));
     renderScheduleEditor();
@@ -261,10 +264,13 @@ async function saveSchedule() {
   });
 
   try {
-    const res = await apiPost({
+    const payload = {
       action: 'replaceSchedule',
-      version, course, rows, token
-    });
+      version, rows, token
+    };
+    if (state.useCourseSchedule) payload.course = course;
+    else payload.course = '共通';
+    const res = await apiPost(payload);
     if (!res.success) throw new Error(res.error);
     toast('保存しました (' + (res.data ? res.data.inserted : rows.length) + '件)');
     loadScheduleForEdit();
@@ -369,7 +375,6 @@ function createSuggestionItem(s) {
       <strong>範囲:</strong> ${escHtml(s.scope || '未設定')}<br>` : ''}
       <strong>${isScope ? '備考' : '提出物詳細'}:</strong> ${escHtml(s.notes || '未設定')}
     </div>
-    <div class="sug-reason">${escHtml(s.reason || '理由なし')}</div>
     <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
       <span class="sug-created">${s.createdAt ? new Date(s.createdAt).toLocaleString('ja-JP') : ''}</span>
       ${s.status === '承認待ち' ? `
@@ -481,14 +486,41 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
+function updateCourseScheduleUI() {
+  const useCourse = state.useCourseSchedule;
+  $('#useCourseScheduleToggle').checked = useCourse;
+  $('#editCourseSelect').disabled = !useCourse;
+  if (!useCourse) {
+    $('#editCourseSelect').value = 'K/文系';
+  }
+}
+
 async function initializeAdmin() {
   try {
     const res = await apiFetch('getConfig');
     if (res.success) {
       state.config = res.data;
       $('#currentVersion').textContent = res.data.version || '--';
+      if (res.data.useCourseSchedule !== undefined) {
+        state.useCourseSchedule = res.data.useCourseSchedule === 'true';
+      }
+      updateCourseScheduleUI();
     }
   } catch (err) {}
+
+  // Toggle course schedule
+  $('#useCourseScheduleToggle').addEventListener('change', async (e) => {
+    state.useCourseSchedule = e.target.checked;
+    updateCourseScheduleUI();
+    try {
+      await apiPost({
+        action: 'updateConfig',
+        key: 'useCourseSchedule',
+        value: String(state.useCourseSchedule),
+        token: getToken()
+      });
+    } catch (err) {}
+  });
 
   await Promise.all([
     loadVersions(),

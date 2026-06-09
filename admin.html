@@ -63,6 +63,16 @@
       <div class="admin-card">
         <h3>🗓 時間割・範囲エディタ</h3>
         <div class="form-group" style="margin-bottom:12px;">
+          <label class="form-label" style="font-size:0.82rem;">コース別範囲設定</label>
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.88rem;">
+              <input type="checkbox" id="useCourseScheduleToggle" checked>
+              <span>コースごとに範囲を変える</span>
+            </label>
+            <span style="font-size:0.78rem; color:var(--gray-400);">OFFの場合は全コース共通の範囲になります</span>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:12px;">
           <label class="form-label" style="font-size:0.82rem;">編集するバージョンとコース</label>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <select class="form-select" id="editVersionSelect" style="width:auto; min-width:160px;">

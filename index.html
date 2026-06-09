@@ -43,8 +43,8 @@
     <button class="menu-item" data-action="scrollTo" data-target="topSection">
       <span class="menu-icon">📋</span> トップ
     </button>
-    <button class="menu-item" data-action="scrollTo" data-target="timerCard">
-      <span class="menu-icon">⏱</span> タイマー
+    <button class="menu-item" data-action="openTimer">
+      <span class="menu-icon">⏱</span> タイマーを開く
     </button>
     <button class="menu-item" data-action="scrollTo" data-target="scheduleCard">
       <span class="menu-icon">📅</span> テスト日程
@@ -115,38 +115,6 @@
       <span id="errorMessage"></span>
     </div>
 
-    <!-- Timer -->
-    <div class="timer-card" id="timerCard">
-      <div class="timer-header">
-        <div class="timer-title">⏱ 勉強タイマー</div>
-        <div class="timer-controls">
-          <select class="form-select timer-subject-select" id="timerSubject" style="width:auto; min-width:140px;">
-            <option value="">教科を選択</option>
-          </select>
-        </div>
-      </div>
-      <div class="timer-display-area">
-        <div class="timer-progress-ring focus" id="timerRing">
-          <svg width="180" height="180" viewBox="0 0 180 180">
-            <circle class="bg-circle" cx="90" cy="90" r="78"/>
-            <circle class="fg-circle" cx="90" cy="90" r="78"
-              stroke-dasharray="490.09" stroke-dashoffset="0"
-              id="timerProgressCircle"/>
-          </svg>
-        </div>
-        <div class="timer-display" id="timerDisplay">25:00</div>
-        <div class="timer-mode-label" id="timerModeLabel">📚 集中</div>
-      </div>
-      <div class="timer-actions">
-        <button class="btn btn-success btn-sm" id="timerToggleBtn">▶ 開始</button>
-        <button class="btn btn-outline btn-sm" id="timerResetBtn">↺ リセット</button>
-      </div>
-      <div class="timer-stats" id="timerStats">
-        <div class="timer-stats-title">今日の勉強時間</div>
-        <div class="timer-empty">まだ記録がありません</div>
-      </div>
-    </div>
-
     <!-- Schedule -->
     <div class="info-card" id="scheduleCard">
       <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
@@ -206,6 +174,52 @@
           SS/理系（生物）
           <span class="course-sub">基本教科 + 地理 + 生物</span>
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Timer Modal -->
+  <div class="modal-overlay" id="timerModal">
+    <div class="modal-card timer-modal-card">
+      <div class="timer-modal-header">
+        <div class="timer-title">⏱ 勉強タイマー</div>
+        <div class="timer-modal-actions">
+          <button class="menu-btn" id="timerFullscreenBtn" title="全画面">⛶</button>
+          <button class="menu-btn" id="timerCloseBtn">✕</button>
+        </div>
+      </div>
+      <div class="timer-controls">
+        <select class="form-select timer-subject-select" id="timerSubject" style="width:auto; min-width:140px;">
+          <option value="">教科を選択</option>
+        </select>
+        <div class="timer-duration-controls">
+          <label class="duration-label">集中</label>
+          <input type="number" class="form-input duration-input" id="timerFocusMin" value="25" min="1" max="120">
+          <span class="duration-unit">分</span>
+          <label class="duration-label">休憩</label>
+          <input type="number" class="form-input duration-input" id="timerBreakMin" value="5" min="1" max="30">
+          <span class="duration-unit">分</span>
+        </div>
+      </div>
+      <div class="timer-display-area">
+        <div class="timer-progress-ring focus" id="timerRing">
+          <svg width="180" height="180" viewBox="0 0 180 180">
+            <circle class="bg-circle" cx="90" cy="90" r="78"/>
+            <circle class="fg-circle" cx="90" cy="90" r="78"
+              stroke-dasharray="490.09" stroke-dashoffset="0"
+              id="timerProgressCircle"/>
+          </svg>
+        </div>
+        <div class="timer-display" id="timerDisplay">25:00</div>
+        <div class="timer-mode-label" id="timerModeLabel">📚 集中</div>
+      </div>
+      <div class="timer-actions">
+        <button class="btn btn-success btn-sm" id="timerToggleBtn">▶ 開始</button>
+        <button class="btn btn-outline btn-sm" id="timerResetBtn">↺ リセット</button>
+      </div>
+      <div class="timer-stats" id="timerStats">
+        <div class="timer-stats-title">今日の勉強時間</div>
+        <div class="timer-empty">まだ記録がありません</div>
       </div>
     </div>
   </div>
