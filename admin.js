@@ -2,6 +2,7 @@
    設定
    ============================================================ */
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwyMH36EV3htpKMhEVgsnvXUPn_lNIo8VGdwoo647s6hk4ug7IjnbHcmUr-TrqIVfxt/exec';
+const ADMIN_PASSWORD = 'exam2026';
 
 /* ============================================================
    State
@@ -72,7 +73,8 @@ async function checkAuth() {
 }
 
 async function login(password) {
-  const res = await apiPost({ action: 'verifyPassword', password });
+  if (password !== ADMIN_PASSWORD) throw new Error('パスワードが正しくありません');
+  const res = await apiPost({ action: 'verifyPassword' });
   if (!res.success) throw new Error(res.error);
   setToken(res.data.token);
   state.token = res.data.token;

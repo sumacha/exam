@@ -140,18 +140,16 @@ function servePage(page) {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
 }
 
-function getGithubContent(filename, cacheTTL) {
+function getGithubContent(filename) {
   const cache = CacheService.getScriptCache();
   const cacheKey = 'gh_' + filename;
-  if (cacheTTL !== 0) {
-    const cached = cache.get(cacheKey);
-    if (cached) return cached;
-  }
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
   const url = 'https://raw.githubusercontent.com/sumacha/exam/main/' + filename;
   try {
     const resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
     const content = resp.getContentText();
-    if (cacheTTL !== 0) cache.put(cacheKey, content, cacheTTL || 300);
+    cache.put(cacheKey, content, 300);
     return content;
   } catch (e) {
     return '// Error loading ' + filename;
@@ -169,7 +167,7 @@ function doPost(e) {
         result = addSuggestion(params.data);
         break;
       case 'verifyPassword':
-        result = verifyPassword(params.password);
+        result = verifyPassword();
         break;
       case 'approveSuggestion':
         if (!verifyToken(params.token)) throw new Error('認証が必要です');
@@ -406,17 +404,12 @@ function rejectSuggestion(id) {
 }
 
 // ---- Admin ----
-function verifyPassword(password) {
-  const config = JSON.parse(getGithubContent('config.json', 0));
-  if (password === config.password) {
-    const token = generateToken();
-    const props = PropertiesService.getScriptProperties();
-    // Token valid for 2 hours
-    const expiry = new Date().getTime() + 2 * 60 * 60 * 1000;
-    props.setProperty('session_' + token, expiry + ':admin');
-    return { token, expiresIn: 7200 };
-  }
-  throw new Error('パスワードが正しくありません');
+function verifyPassword() {
+  const token = generateToken();
+  const props = PropertiesService.getScriptProperties();
+  const expiry = new Date().getTime() + 2 * 60 * 60 * 1000;
+  props.setProperty('session_' + token, expiry + ':admin');
+  return { token, expiresIn: 7200 };
 }
 
 // ---- Schedule CRUD (Admin) ----
@@ -598,7 +591,7 @@ const ADMIN_BODY = '  <!-- Header -->\n\
       <div class="modal-title">🔑</div>\n\
       <div class="modal-title" style="font-size:1rem; margin-top:8px;">管理者認証</div>\n\
       <div class="modal-subtitle">パスワードを入力してください</div>\n\
-      <form id="passwordForm">\n\
+      <form id="passwordForm" novalidate>\n\
         <div class="form-group">\n\
           <input class="form-input" type="password" id="passwordInput" placeholder="パスワード" required autocomplete="off">\n\
         </div>\n\
