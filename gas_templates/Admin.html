@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>管理者画面 - テスト範囲表</title>
+  <?!= include('Style'); ?>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="header-title">
+        <span class="icon">⚙️</span>
+        管理者画面
+      </div>
+      <div style="display:flex; align-items:center; gap:4px;">
+        <a class="menu-btn" href="?page=index" aria-label="トップ" title="トップに戻る" style="text-decoration:none; font-size:0.85rem; color:var(--gray-500); padding:6px 10px;">
+          📋 トップ
+        </a>
+        <button class="menu-btn" id="backBtn" aria-label="戻る">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Auth Guard -->
+  <div class="auth-guard" id="authGuard">
+    <div class="modal-card password-modal" style="max-width:380px; margin:0 16px;">
+      <div class="modal-title">🔑</div>
+      <div class="modal-title" style="font-size:1rem; margin-top:8px;">管理者認証</div>
+      <div class="modal-subtitle">パスワードを入力してください</div>
+      <form id="passwordForm">
+        <div class="form-group">
+          <input class="form-input" type="password" id="passwordInput" placeholder="パスワード" required autocomplete="off">
+        </div>
+        <div class="error-box hidden" id="authError">
+          <span>⚠️</span>
+          <span id="authErrorMessage"></span>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full">ログイン</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Admin Content -->
+  <main class="container admin-content" id="adminContent">
+
+    <!-- Version Management -->
+    <div class="admin-panel">
+      <div class="admin-card">
+        <h3>📌 バージョン管理</h3>
+        <div style="margin-bottom:12px;">
+          <span style="font-size:0.85rem; color:var(--gray-500);">現在のバージョン:</span>
+          <span class="version-current" id="currentVersion">--</span>
+        </div>
+        <div class="version-control">
+          <select class="form-select" id="versionSelect" style="width:auto; min-width:200px;" disabled>
+            <option value="">読み込み中...</option>
+          </select>
+          <button class="btn btn-primary btn-sm" id="updateVersionBtn" disabled>反映</button>
+          <button class="btn btn-outline btn-sm" id="addVersionBtn">＋ 新規作成</button>
+        </div>
+      </div>
+
+      <!-- Schedule Editor -->
+      <div class="admin-card">
+        <h3>📅 スケジュール編集</h3>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; align-items:center;">
+          <select class="form-select" id="editVersionSelect" style="width:auto; min-width:180px;">
+            <option value="">バージョン</option>
+          </select>
+          <select class="form-select" id="editCourseSelect" style="width:auto; min-width:180px;">
+            <option value="K/文系">K/文系</option>
+            <option value="K/理系（物理）">K/理系（物理）</option>
+            <option value="K/理系（生物）">K/理系（生物）</option>
+            <option value="SS/理系（物理）">SS/理系（物理）</option>
+            <option value="SS/理系（生物）">SS/理系（生物）</option>
+          </select>
+          <button class="btn btn-primary btn-sm" id="loadScheduleBtn">読み込み</button>
+          <button class="btn btn-outline btn-sm" id="addEntryBtn">＋ 行を追加</button>
+          <button class="btn btn-success btn-sm" id="saveScheduleBtn">💾 保存</button>
+        </div>
+        <div class="schedule-editor" id="scheduleEditor">
+          <div class="empty-state"><p>「読み込み」ボタンでデータを取得してください</p></div>
+        </div>
+      </div>
+
+      <!-- Suggestions -->
+      <div class="admin-card">
+        <h3>💡 提案一覧</h3>
+        <div class="tab-bar" id="sugTabBar">
+          <button class="tab-btn active" data-filter="all">すべて</button>
+          <button class="tab-btn" data-filter="test_scope">📖 範囲</button>
+          <button class="tab-btn" data-filter="submission">📝 提出物</button>
+        </div>
+        <div class="loading" id="sugLoading">
+          <div class="spinner"></div>
+          <p>読み込み中...</p>
+        </div>
+        <div id="suggestionList"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <?!= include('AdminJs'); ?>
+</body>
+</html>
