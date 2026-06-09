@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>変更点を提案 - テスト範囲表</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="header-title">
+        <span class="icon">💡</span>
+        変更点を提案
+      </div>
+      <button class="menu-btn" id="backBtn" aria-label="戻る">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="container">
+
+    <div class="suggest-card">
+      <h2>テスト範囲表の修正・追加を提案</h2>
+      <p class="desc">範囲表に誤りがあった場合や、追加したい情報がある場合はこちらから提案してください。管理者が確認後、反映されます。</p>
+
+      <div class="error-box hidden" id="errorBox">
+        <span>⚠️</span>
+        <span id="errorMessage"></span>
+      </div>
+
+      <form id="suggestForm" novalidate>
+
+        <!-- 提案の種類 -->
+        <div class="form-group">
+          <label class="form-label">提案の種類 <span class="required">*</span></label>
+          <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:4px;">
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.9rem;">
+              <input type="radio" name="sugType" value="test_scope" checked>
+              📖 テスト範囲の変更
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.9rem;">
+              <input type="radio" name="sugType" value="submission">
+              📝 提出物の変更
+            </label>
+          </div>
+        </div>
+
+        <!-- 定期テスト選択 -->
+        <div class="form-group">
+          <label class="form-label" for="sugVersion">対象の定期テスト <span class="required">*</span></label>
+          <select class="form-select" id="sugVersion" required>
+            <option value="">読み込み中...</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="sugCourse">コース <span class="required">*</span></label>
+          <select class="form-select" id="sugCourse" required>
+            <option value="">選択してください</option>
+            <option value="K/文系">K/文系</option>
+            <option value="K/理系（物理）">K/理系（物理）</option>
+            <option value="K/理系（生物）">K/理系（生物）</option>
+            <option value="SS/理系（物理）">SS/理系（物理）</option>
+            <option value="SS/理系（生物）">SS/理系（生物）</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="sugSubject">教科 <span class="required">*</span></label>
+          <select class="form-select" id="sugSubject" required>
+            <option value="">先にコースを選択してください</option>
+          </select>
+        </div>
+
+        <!-- 範囲変更時のみ表示 -->
+        <div id="scopeFields">
+          <div class="form-group">
+            <label class="form-label" for="sugDate">日程</label>
+            <input class="form-input" type="text" id="sugDate" placeholder="例: 6/15(月)">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="sugPeriod">時限</label>
+            <input class="form-input" type="text" id="sugPeriod" placeholder="例: 2時間目">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="sugScope">範囲</label>
+            <textarea class="form-textarea" id="sugScope" placeholder="例: 教科書 p.10~45&#10;ワーク p.2~20" rows="3"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="sugNotes">備考</label>
+            <textarea class="form-textarea" id="sugNotes" placeholder="テストの形式や注意事項など" rows="2"></textarea>
+          </div>
+        </div>
+
+        <!-- 提出物変更時のみ表示 -->
+        <div id="submissionFields" class="hidden">
+          <div class="form-group">
+            <label class="form-label" for="sugSubNotes">提出物の詳細 <span class="required">*</span></label>
+            <textarea class="form-textarea" id="sugSubNotes" placeholder="提出物の内容、期限など" rows="3" required></textarea>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="sugReason">変更理由 <span class="required">*</span></label>
+          <textarea class="form-textarea" id="sugReason" placeholder="なぜこの変更を提案するのか教えてください" rows="3" required></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-full" id="submitBtn">
+          提案を送信する
+        </button>
+      </form>
+
+      <div class="loading hidden" id="loading" style="padding:20px 0;">
+        <div class="spinner"></div>
+        <p>送信中...</p>
+      </div>
+
+      <div class="empty-state hidden" id="successState">
+        <div class="empty-icon">✅</div>
+        <p>提案を送信しました！</p>
+        <p style="font-size:0.85rem; color:var(--gray-400); margin-top:8px;">管理者が確認後、反映されます</p>
+        <button class="btn btn-outline" style="margin-top:16px;" onclick="location.href='index.html'">トップに戻る</button>
+      </div>
+    </div>
+
+  </main>
+
+  <script src="suggest.js"></script>
+</body>
+</html>
