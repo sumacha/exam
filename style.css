@@ -979,28 +979,141 @@ body.dark .badge-version {
 /* Responsive */
 @media (max-width: 600px) {
   .container {
-    padding: 12px 10px 32px;
+    padding: 10px 8px 28px;
   }
   .info-card {
-    padding: 16px;
+    padding: 14px;
   }
   .schedule-table {
-    font-size: 0.82rem;
+    font-size: 0.78rem;
   }
   .schedule-table th,
   .schedule-table td {
-    padding: 8px 8px;
+    padding: 6px 5px;
+  }
+  .schedule-table th {
+    font-size: 0.7rem;
+  }
+  .scope-cell {
+    font-size: 0.76rem;
+    word-break: break-word;
+  }
+  .notes-cell {
+    font-size: 0.74rem;
+    word-break: break-word;
+  }
+  .subject-name {
+    font-size: 0.8rem;
   }
   .modal-card {
-    padding: 24px 20px;
+    padding: 20px 16px;
+    margin: 0 8px;
+  }
+  .timer-modal-card {
+    padding: 16px;
+  }
+  .timer-modal-card .timer-display {
+    font-size: 2.4rem;
+  }
+  .timer-progress-ring {
+    width: 140px;
+    height: 140px;
+  }
+  .timer-progress-ring svg {
+    width: 140px;
+    height: 140px;
+  }
+  .timer-modal-card .timer-progress-ring {
+    width: 120px;
+    height: 120px;
+  }
+  .timer-modal-card .timer-progress-ring svg {
+    width: 120px;
+    height: 120px;
   }
   .suggest-card,
   .admin-card {
-    padding: 16px;
+    padding: 14px;
   }
   .menu-dropdown {
-    right: 8px;
-    min-width: 200px;
+    right: 4px;
+    left: 4px;
+    min-width: unset;
+    width: auto;
+  }
+  .menu-item {
+    padding: 12px 14px;
+    font-size: 0.88rem;
+  }
+  .course-btn {
+    padding: 12px 12px;
+    font-size: 0.9rem;
+  }
+  .btn {
+    padding: 8px 14px;
+    font-size: 0.85rem;
+  }
+  .btn-sm {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+  }
+  .header-inner {
+    padding: 0 10px;
+    height: 50px;
+  }
+  .header-title {
+    font-size: 1rem;
+  }
+  .progress-cell input[type="checkbox"] {
+    width: 24px;
+    height: 24px;
+  }
+  .schedule-editor {
+    font-size: 0.78rem;
+  }
+  .schedule-editor .edit-input {
+    font-size: 0.75rem;
+    padding: 3px 4px;
+  }
+  .progress-top {
+    gap: 8px;
+  }
+  .progress-top .label {
+    font-size: 0.82rem;
+  }
+  .countdown-number {
+    font-size: 2rem;
+  }
+  .version-control {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .version-control .btn {
+    width: 100%;
+  }
+  .suggestion-item {
+    padding: 12px;
+  }
+  .sug-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .subj-progress-name {
+    font-size: 0.8rem;
+  }
+  .info-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .timer-controls {
+    justify-content: center;
+  }
+  .timer-duration-controls {
+    justify-content: center;
+  }
+  .course-grid {
+    gap: 8px;
   }
 }
 

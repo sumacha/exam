@@ -207,19 +207,9 @@ function getSchedule(version, course) {
   const data = sheetToObjects(sheet);
   return data.filter(row => {
     if (version && row.version !== version) return false;
-    if (course && row.course !== course) return false;
+    if (course && row.course !== course && row.course !== '共通') return false;
     return true;
   });
-}
-
-// Get config value for useCourseSchedule
-function getUseCourseSchedule() {
-  try {
-    const config = getConfig();
-    return config.useCourseSchedule !== 'false';
-  } catch (e) {
-    return true;
-  }
 }
 
 // ---- Subjects ----
@@ -369,9 +359,7 @@ function rejectSuggestion(id) {
 
 // ---- Admin ----
 function verifyPassword(password) {
-  const config = getConfig();
-  const stored = config.password || 'exam2026';
-  if (password === stored) {
+  if (password === 'exam2026') {
     const token = generateToken();
     const props = PropertiesService.getScriptProperties();
     // Token valid for 2 hours

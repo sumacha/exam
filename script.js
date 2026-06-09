@@ -121,12 +121,9 @@ async function loadData() {
     if (!configRes.success) throw new Error(configRes.error);
     state.config = configRes.data;
 
-    const useCourseSchedule = configRes.data.useCourseSchedule !== 'false';
-    const scheduleParams = { version: configRes.data.version };
-    if (useCourseSchedule) scheduleParams.course = state.course;
     const [subjectsRes, scheduleRes] = await Promise.all([
       apiFetch('getSubjects', { course: state.course, version: configRes.data.version }),
-      apiFetch('getSchedule', scheduleParams)
+      apiFetch('getSchedule', { version: configRes.data.version, course: state.course })
     ]);
     if (!subjectsRes.success) throw new Error(subjectsRes.error);
     if (!scheduleRes.success) throw new Error(scheduleRes.error);

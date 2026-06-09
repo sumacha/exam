@@ -14,8 +14,7 @@ let state = {
   scheduleData: [],
   editVersion: '',
   editCourse: 'K/文系',
-  filterType: 'all',
-  useCourseSchedule: true
+  filterType: 'all'
 };
 
 /* ============================================================
@@ -175,9 +174,7 @@ async function loadScheduleForEdit() {
   state.editCourse = course;
 
   try {
-    const params = { version };
-    if (state.useCourseSchedule) params.course = course;
-    const res = await apiFetch('getSchedule', params);
+    const res = await apiFetch('getSchedule', { version, course });
     if (!res.success) throw new Error(res.error);
     state.scheduleData = (res.data || []).map((row, i) => ({ ...row, _editId: i }));
     renderScheduleEditor();
@@ -264,13 +261,10 @@ async function saveSchedule() {
   });
 
   try {
-    const payload = {
+    const res = await apiPost({
       action: 'replaceSchedule',
-      version, rows, token
-    };
-    if (state.useCourseSchedule) payload.course = course;
-    else payload.course = '共通';
-    const res = await apiPost(payload);
+      version, course, rows, token
+    });
     if (!res.success) throw new Error(res.error);
     toast('保存しました (' + (res.data ? res.data.inserted : rows.length) + '件)');
     loadScheduleForEdit();
@@ -486,41 +480,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-function updateCourseScheduleUI() {
-  const useCourse = state.useCourseSchedule;
-  $('#useCourseScheduleToggle').checked = useCourse;
-  $('#editCourseSelect').disabled = !useCourse;
-  if (!useCourse) {
-    $('#editCourseSelect').value = 'K/文系';
-  }
-}
-
 async function initializeAdmin() {
   try {
     const res = await apiFetch('getConfig');
     if (res.success) {
       state.config = res.data;
       $('#currentVersion').textContent = res.data.version || '--';
-      if (res.data.useCourseSchedule !== undefined) {
-        state.useCourseSchedule = res.data.useCourseSchedule === 'true';
-      }
-      updateCourseScheduleUI();
     }
   } catch (err) {}
-
-  // Toggle course schedule
-  $('#useCourseScheduleToggle').addEventListener('change', async (e) => {
-    state.useCourseSchedule = e.target.checked;
-    updateCourseScheduleUI();
-    try {
-      await apiPost({
-        action: 'updateConfig',
-        key: 'useCourseSchedule',
-        value: String(state.useCourseSchedule),
-        token: getToken()
-      });
-    } catch (err) {}
-  });
 
   await Promise.all([
     loadVersions(),
