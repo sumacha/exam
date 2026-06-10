@@ -1,7 +1,7 @@
 /* ============================================================
    設定
    ============================================================ */
-const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwIbsoEIAt4K0gHyqLPEEgpWQ71srLvYla5cVYW_N6uDl02y2umFRt2UyGKdE3VJFuR/exec';
+const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwWNG4xKO6yGTWTz2Z9oxdOOkGfHsfia7ItUdvAXPSqwe_tlbrhVTgPgXA_64bmFfG1FA/exec';
 
 /* ============================================================
    State
@@ -74,7 +74,7 @@ async function loadVersions() {
     sel.disabled = false;
     $('#updateVersionBtn').disabled = false;
   } catch (err) {
-    toast('バージョン一覧の取得に失敗');
+    toast('バージョン一覧の取得に失敗: ' + (err.message || ''));
   }
 }
 

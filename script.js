@@ -1,7 +1,7 @@
 /* ============================================================
    設定
    ============================================================ */
-const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwIbsoEIAt4K0gHyqLPEEgpWQ71srLvYla5cVYW_N6uDl02y2umFRt2UyGKdE3VJFuR/exec';
+const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwWNG4xKO6yGTWTz2Z9oxdOOkGfHsfia7ItUdvAXPSqwe_tlbrhVTgPgXA_64bmFfG1FA/exec';
 
 const STORAGE_KEYS = {
   course: 'exam_course_selected',
@@ -716,4 +716,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   initTimer();
   initCourseSelection();
+
+  // GAS対応: .htmlへのリンクを ?page= に自動変換
+  if (window.location.pathname.includes('/macros/')) {
+    document.querySelectorAll('a[href$=".html"]').forEach(a => {
+      const page = a.getAttribute('href').replace('.html', '');
+      a.href = '?page=' + page;
+    });
+  }
 });
