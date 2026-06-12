@@ -1,0 +1,20 @@
+{
+  "name": "範囲表",
+  "short_name": "範囲表",
+  "display": "standalone",
+  "start_url": ".",
+  "background_color": "#ffffff",
+  "theme_color": "#4f8cff",
+  "icons": [
+    {
+      "src": "https://drive.google.com/thumbnail?id=1Gm9vT1ndaRkRFun0H5ZPmsCFuuTPlyK8&sz=w192",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://drive.google.com/thumbnail?id=1Gm9vT1ndaRkRFun0H5ZPmsCFuuTPlyK8&sz=w512",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

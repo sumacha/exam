@@ -9,19 +9,48 @@ const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwWNG4xKO6yGTWTz2Z
 function $(sel) { return document.querySelector(sel); }
 function show(el) { el.classList.remove('hidden'); }
 function hide(el) { el.classList.add('hidden'); }
-
-function apiPost(data) {
-  return fetch(API_BASE_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  }).then(r => r.json());
+function escHtml(str) {
+  if (!str) return '';
+  var div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+function toast(msg) {
+  var existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  var t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(function() { t.remove(); }, 2500);
 }
 
-function apiFetch(action, params = {}) {
-  const qs = new URLSearchParams(params).toString();
-  const url = API_BASE_URL + '?action=' + action + (qs ? '&' + qs : '');
-  return fetch(url).then(r => r.json());
+async function apiPost(data) {
+  const res = await fetch(API_BASE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(data)
+  });
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('サーバーエラー: HTMLが返されました');
+  }
+}
+
+async function apiFetch(action, params = {}) {
+  const res = await fetch(API_BASE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action, ...params })
+  });
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('サーバーエラー: HTMLが返されました');
+  }
 }
 
 /* ============================================================
@@ -29,7 +58,7 @@ function apiFetch(action, params = {}) {
    ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
 
-  $('#backBtn').addEventListener('click', () => history.back());
+  $('#backBtn').addEventListener('click', () => { window.location.href = 'https://script.google.com/macros/s/AKfycbwWNG4xKO6yGTWTz2Z9oxdOOkGfHsfia7ItUdvAXPSqwe_tlbrhVTgPgXA_64bmFfG1FA/exec?page=index'; });
 
   // Load versions
   loadVersions();
@@ -187,4 +216,11 @@ async function loadSubjects(course, version) {
   } finally {
     sel.disabled = false;
   }
+}
+
+function resetSuggestionForm() {
+  document.getElementById('suggestForm').reset();
+  document.getElementById('successState').classList.add('hidden');
+  document.getElementById('suggestForm').classList.remove('hidden');
+  document.getElementById('errorBox').classList.add('hidden');
 }

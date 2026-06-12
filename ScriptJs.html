@@ -6,42 +6,25 @@ const STORAGE_KEYS = {
   progress: 'exam_progress_'
 };
 
+async function autoSave() {
+  if (!account.loggedIn || !account.token) return;
+  var savedData = {};
+  for (var i = 0; i < localStorage.length; i++) {
+    var k = localStorage.key(i);
+    if (k && !k.startsWith('exam_account_')) savedData[k] = localStorage.getItem(k);
+  }
+  try {
+    await apiPost({ action: 'save', token: account.token, savedData: savedData });
+  } catch (err) {}
+}
+
 let state = {
   course: null,
   config: null,
   schedule: [],
-  subjects: []
+  subjects: [],
+  submissions: []
 };
-
-function $(sel) { return document.querySelector(sel); }
-function $$(sel) { return document.querySelectorAll(sel); }
-
-function show(el) { el.classList.remove('hidden'); }
-function hide(el) { el.classList.add('hidden'); }
-
-function toast(msg) {
-  const existing = document.querySelector('.toast');
-  if (existing) existing.remove();
-  const t = document.createElement('div');
-  t.className = 'toast';
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 2500);
-}
-
-function apiFetch(action, params = {}) {
-  const qs = new URLSearchParams(params).toString();
-  const url = API_BASE_URL + '?action=' + action + (qs ? '&' + qs : '');
-  return fetch(url, { method: 'GET' }).then(r => r.json());
-}
-
-function apiPost(data) {
-  return fetch(API_BASE_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  }).then(r => r.json());
-}
 
 function getSavedCourse() {
   return localStorage.getItem(STORAGE_KEYS.course);
@@ -107,15 +90,17 @@ async function loadData() {
     if (!configRes.success) throw new Error(configRes.error);
     state.config = configRes.data;
 
-    const [subjectsRes, scheduleRes] = await Promise.all([
+    const [subjectsRes, scheduleRes, submissionsRes] = await Promise.all([
       apiFetch('getSubjects', { course: state.course, version: configRes.data.version }),
-      apiFetch('getSchedule', { version: configRes.data.version, course: state.course })
+      apiFetch('getSchedule', { version: configRes.data.version, course: state.course }),
+      apiFetch('getSubmissions', { version: configRes.data.version, course: state.course })
     ]);
     if (!subjectsRes.success) throw new Error(subjectsRes.error);
     if (!scheduleRes.success) throw new Error(scheduleRes.error);
 
     state.schedule = scheduleRes.data || [];
     state.subjects = subjectsRes.data;
+    state.submissions = submissionsRes.success ? (submissionsRes.data || []) : [];
 
     state.schedule.sort((a, b) => {
       const dateA = a.date || '';
@@ -129,7 +114,7 @@ async function loadData() {
 
     renderInfo();
     renderSchedule();
-    renderSubjectProgress();
+    renderSubmissions();
     renderCountdown();
     updateProgressUI();
     updateLastUpdated();
@@ -166,22 +151,17 @@ function renderSchedule() {
 
   let lastDate = '';
   state.schedule.forEach(row => {
-    const progressKey = getProgressKey(row);
-    const checked = localStorage.getItem(progressKey) === 'true';
-
-    const tr = document.createElement('tr');
-    if (checked) tr.classList.add('row-completed');
-
     const color = row.color || '#3B82F6';
     const date = row.date || '';
 
     if (date && date !== lastDate) {
       lastDate = date;
       const hdr = document.createElement('tr');
-      hdr.innerHTML = `<td class="date-group-header" colspan="6">📅 ${escHtml(date)}</td>`;
+      hdr.innerHTML = `<td class="date-group-header" colspan="5">📅 ${escHtml(date)}</td>`;
       tbody.appendChild(hdr);
     }
 
+    const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>
         <div class="subject-cell">
@@ -193,6 +173,40 @@ function renderSchedule() {
       <td class="period-cell">${escHtml(row.period || '')}</td>
       <td class="scope-cell">${escHtml(row.scope || '').replace(/\n/g, '<br>')}</td>
       <td class="notes-cell">${escHtml(row.notes || '').replace(/\n/g, '<br>')}</td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+}
+
+function renderSubmissions() {
+  const tbody = $('#submissionBody');
+  const emptyState = $('#subEmptyState');
+  tbody.innerHTML = '';
+
+  if (!state.submissions || state.submissions.length === 0) {
+    show(emptyState);
+    return;
+  }
+  hide(emptyState);
+
+  state.submissions.forEach((row, i) => {
+    const progressKey = getSubProgressKey(row, i);
+    const checked = localStorage.getItem(progressKey) === 'true';
+
+    const tr = document.createElement('tr');
+    if (checked) tr.classList.add('row-completed');
+
+    const color = row.color || '#3B82F6';
+
+    tr.innerHTML = `
+      <td>
+        <div class="subject-cell">
+          <span class="subject-dot" style="background:${color}"></span>
+          <span class="subject-name">${escHtml(row.subject)}</span>
+        </div>
+      </td>
+      <td class="scope-cell">${escHtml(row.notes || '').replace(/\n/g, '<br>')}</td>
       <td class="progress-cell">
         <input type="checkbox" ${checked ? 'checked' : ''} data-key="${progressKey}">
       </td>
@@ -203,22 +217,37 @@ function renderSchedule() {
       localStorage.setItem(progressKey, checkbox.checked);
       tr.classList.toggle('row-completed', checkbox.checked);
       updateProgressUI();
-      renderSubjectProgress();
     });
 
     tbody.appendChild(tr);
   });
+  updateSubProgressMini();
+}
+
+function getSubProgressKey(row, index) {
+  const ver = state.config ? state.config.version : 'unknown';
+  const notePart = (row.notes || '').replace(/[^a-zA-Z0-9\u3000-\u9FFF]/g, '').slice(0, 20);
+  return ['exam_sub_progress', ver, state.course, row.subject, notePart || index].filter(Boolean).join('_');
+}
+
+function updateSubProgressMini() {
+  const checkboxes = $$('#submissionBody input[type="checkbox"]');
+  const total = checkboxes.length;
+  const done = [...checkboxes].filter(cb => cb.checked).length;
+  $('#subProgressMini').textContent = done + ' / ' + total;
 }
 
 function updateProgressUI() {
-  const checkboxes = $$('#scheduleBody input[type="checkbox"]');
-  const total = checkboxes.length;
-  const done = [...checkboxes].filter(cb => cb.checked).length;
+  const subBoxes = $$('#submissionBody input[type="checkbox"]');
+  const total = subBoxes.length;
+  const done = [...subBoxes].filter(cb => cb.checked).length;
 
   const text = `${done} / ${total}`;
   $('#topProgressText').textContent = text;
   const pct = total > 0 ? (done / total) * 100 : 0;
   $('#topProgressBar').style.width = pct + '%';
+  updateSubProgressMini();
+  autoSave();
 }
 
 function updateLastUpdated() {
@@ -230,11 +259,6 @@ function updateLastUpdated() {
   $('#lastUpdated').textContent = '最終更新: ' + str;
 }
 
-function getProgressKey(row) {
-  const ver = state.config ? state.config.version : 'unknown';
-  return STORAGE_KEYS.progress + ver + '_' + state.course + '_' + row.subject;
-}
-
 function escHtml(str) {
   if (!str) return '';
   const div = document.createElement('div');
@@ -244,14 +268,13 @@ function escHtml(str) {
 
 function resetProgress() {
   if (!confirm('全てのチェックボックスをリセットしますか？')) return;
-  const checkboxes = $$('#scheduleBody input[type="checkbox"]');
-  checkboxes.forEach(cb => {
+  const allBoxes = $$('#submissionBody input[type="checkbox"]');
+  allBoxes.forEach(cb => {
     cb.checked = false;
     localStorage.setItem(cb.dataset.key, 'false');
     cb.closest('tr').classList.remove('row-completed');
   });
   updateProgressUI();
-  renderSubjectProgress();
   toast('進捗をリセットしました');
 }
 
@@ -373,46 +396,6 @@ function parseScheduleDate(str) {
   today.setHours(0, 0, 0, 0);
   if (d < today) d.setFullYear(d.getFullYear() + 1);
   return d;
-}
-
-function renderSubjectProgress() {
-  const container = $('#subjectProgressContainer');
-  if (!state.schedule || state.schedule.length === 0) {
-    container.innerHTML = '';
-    return;
-  }
-
-  const map = {};
-  state.schedule.forEach(row => {
-    const key = row.subject;
-    if (!key) return;
-    if (!map[key]) {
-      map[key] = { subject: key, total: 0, done: 0, color: row.color || '#3B82F6' };
-    }
-    map[key].total++;
-    if (localStorage.getItem(getProgressKey(row)) === 'true') {
-      map[key].done++;
-    }
-  });
-
-  let html = '';
-  Object.values(map).forEach(s => {
-    const pct = s.total > 0 ? Math.round((s.done / s.total) * 100) : 0;
-    html += '<div class="subj-progress-item">'
-      + '<div class="subj-progress-header">'
-      + '<span class="subj-progress-name">'
-      + '<span class="subject-dot" style="background:' + s.color + '"></span>'
-      + escHtml(s.subject)
-      + '</span>'
-      + '<span class="subj-progress-stat">' + s.done + '/' + s.total + ' (' + pct + '%)</span>'
-      + '</div>'
-      + '<div class="progress-bar-wrap">'
-      + '<div class="progress-bar-fill" style="width:' + pct + '%;background:' + s.color + '"></div>'
-      + '</div>'
-      + '</div>';
-  });
-
-  container.innerHTML = html;
 }
 
 const TIMER_PREFIX = 'exam_timer_';
@@ -610,21 +593,32 @@ function exportCalendar() {
     return;
   }
 
+  const now = new Date();
+  const ds = formatICSDate(now);
+
   let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ExamSchedule//JP\r\n';
 
-  state.schedule.forEach(row => {
+  state.schedule.forEach((row, i) => {
     if (!row.date || !row.subject) return;
     const d = parseICSDate(row.date);
     if (!d) return;
 
-    const period = row.period ? ' ' + row.period : '';
+    const period = row.period || '';
+    const summary = escapeICS(row.subject) + (period ? ' (' + escapeICS(period) + ')' : '');
+
     let desc = '';
-    if (row.scope) desc += '範囲: ' + row.scope.replace(/\n/g, '\\n');
-    if (row.notes) desc += (desc ? '\\n' : '') + '備考: ' + row.notes.replace(/\n/g, '\\n');
+    if (row.scope) desc += '範囲: ' + escapeICS(row.scope.replace(/\n+$/, ''));
+    if (row.notes) desc += (desc ? '\\n' : '') + '備考: ' + escapeICS(row.notes);
+    if (state.course) desc += (desc ? '\\n' : '') + 'コース: ' + escapeICS(state.course);
+
+    const uid = d + '-' + row.subject.replace(/[^a-zA-Z0-9]/g, '') + '-' + i + '@exam';
 
     ics += 'BEGIN:VEVENT\r\n';
-    ics += 'SUMMARY:' + row.subject + ' テスト' + period + '\r\n';
+    ics += 'UID:' + uid + '\r\n';
+    ics += 'DTSTAMP:' + ds + 'T000000Z\r\n';
+    ics += 'SUMMARY:' + summary + '\r\n';
     ics += 'DTSTART;VALUE=DATE:' + d + '\r\n';
+    ics += 'DTEND;VALUE=DATE:' + addDays(d, 1) + '\r\n';
     if (desc) ics += 'DESCRIPTION:' + desc + '\r\n';
     ics += 'END:VEVENT\r\n';
   });
@@ -646,15 +640,36 @@ function exportCalendar() {
 function parseICSDate(str) {
   const m = str.match(/(\d{1,2})\/(\d{1,2})/);
   if (!m) return null;
-  const d = new Date();
-  d.setMonth(parseInt(m[1]) - 1, parseInt(m[2]));
-  d.setHours(0, 0, 0, 0);
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (d < today) d.setFullYear(d.getFullYear() + 1);
-  return d.getFullYear()
-    + String(d.getMonth() + 1).padStart(2, '0')
-    + String(d.getDate()).padStart(2, '0');
+  const month = parseInt(m[1]) - 1;
+  const day = parseInt(m[2]);
+  let year = today.getFullYear();
+  let d = new Date(year, month, day);
+  d.setHours(0, 0, 0, 0);
+  if (d < new Date(today.getFullYear(), today.getMonth(), today.getDate())) {
+    d = new Date(year + 1, month, day);
+  }
+  return formatICSDate(d);
+}
+
+function escapeICS(str) {
+  if (!str) return '';
+  return str.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+}
+
+function formatICSDate(date) {
+  return date.getFullYear()
+    + String(date.getMonth() + 1).padStart(2, '0')
+    + String(date.getDate()).padStart(2, '0');
+}
+
+function addDays(dateStr, n) {
+  const y = parseInt(dateStr.slice(0, 4));
+  const m = parseInt(dateStr.slice(4, 6)) - 1;
+  const d = parseInt(dateStr.slice(6, 8));
+  const dt = new Date(y, m, d);
+  dt.setDate(dt.getDate() + n);
+  return formatICSDate(dt);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -670,5 +685,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
   initTimer();
   initCourseSelection();
+  initAccount();
+  initAccountUI();
+
+  // Auto-show login modal if not logged in
+  const hadSavedToken = localStorage.getItem(ACCOUNT_KEYS.token) &&
+    localStorage.getItem(ACCOUNT_KEYS.autoLogin) === 'true';
+
+  if (hadSavedToken) {
+    let attempts = 0;
+    const checkInterval = setInterval(() => {
+      attempts++;
+      if (account.loggedIn || attempts >= 60) {
+        clearInterval(checkInterval);
+        if (!account.loggedIn) openLoginModal();
+      }
+    }, 100);
+  } else {
+    if (!account.loggedIn) openLoginModal();
+  }
 });
 </script>

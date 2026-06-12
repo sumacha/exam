@@ -1,101 +1,13 @@
 <script>
-const API_BASE_URL = window.location.origin + window.location.pathname;
-
-function $(sel) { return document.querySelector(sel); }
-function show(el) { el.classList.remove('hidden'); }
-function hide(el) { el.classList.add('hidden'); }
-
-function apiPost(data) {
-  return fetch(API_BASE_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  }).then(r => r.json());
+/* ============================================================
+   Suggest Page
+   ============================================================ */
+function resetSuggestionForm() {
+  $('#suggestForm').reset();
+  hide($('#successState'));
+  show($('#suggestForm'));
+  hide($('#errorBox'));
 }
-
-function apiFetch(action, params = {}) {
-  const qs = new URLSearchParams(params).toString();
-  const url = API_BASE_URL + '?action=' + action + (qs ? '&' + qs : '');
-  return fetch(url).then(r => r.json());
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-
-  $('#backBtn').addEventListener('click', () => history.back());
-
-  loadVersions();
-
-  const savedCourse = localStorage.getItem('exam_course_selected');
-  if (savedCourse) {
-    $('#sugCourse').value = savedCourse;
-  }
-
-  $('#sugCourse').addEventListener('change', (e) => {
-    const course = e.target.value;
-    if (course) {
-      loadSubjects(course, $('#sugVersion').value);
-    } else {
-      const sel = $('#sugSubject');
-      sel.innerHTML = '<option value="">先にコースを選択してください</option>';
-    }
-  });
-
-  $('#sugVersion').addEventListener('change', (e) => {
-    const course = $('#sugCourse').value;
-    if (course) {
-      loadSubjects(course, e.target.value);
-    }
-  });
-
-  document.querySelectorAll('input[name="sugType"]').forEach(radio => {
-    radio.addEventListener('change', toggleTypeFields);
-  });
-
-  $('#suggestForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const type = document.querySelector('input[name="sugType"]:checked').value;
-    const version = $('#sugVersion').value;
-    const course = $('#sugCourse').value;
-    const subject = $('#sugSubject').value;
-    const date = $('#sugDate').value.trim();
-    const period = $('#sugPeriod').value.trim();
-    const scope = $('#sugScope').value.trim();
-    const notes = type === 'submission' ? $('#sugSubNotes').value.trim() : $('#sugNotes').value.trim();
-
-    if (!version || !course || !subject) {
-      show($('#errorBox'));
-      $('#errorMessage').textContent = '定期テスト、コース、教科は必須です';
-      return;
-    }
-    if (type === 'submission' && !notes) {
-      show($('#errorBox'));
-      $('#errorMessage').textContent = '提出物の詳細を入力してください';
-      return;
-    }
-
-    hide($('#errorBox'));
-    show($('#loading'));
-    hide($('#suggestForm'));
-
-    try {
-      const res = await apiPost({
-        action: 'addSuggestion',
-        data: { type, version, course, subject, date, period, scope, notes }
-      });
-
-      if (!res.success) throw new Error(res.error);
-
-      show($('#successState'));
-
-    } catch (err) {
-      hide($('#loading'));
-      show($('#suggestForm'));
-      show($('#errorBox'));
-      $('#errorMessage').textContent = '送信に失敗しました: ' + err.message;
-    }
-  });
-});
 
 function toggleTypeFields() {
   const type = document.querySelector('input[name="sugType"]:checked').value;
@@ -141,13 +53,6 @@ async function loadVersions() {
   }
 }
 
-function resetSuggestionForm() {
-  $('#suggestForm').reset();
-  hide($('#successState'));
-  show($('#suggestForm'));
-  hide($('#errorBox'));
-}
-
 async function loadSubjects(course, version) {
   const sel = $('#sugSubject');
   sel.innerHTML = '<option value="">読み込み中...</option>';
@@ -170,4 +75,139 @@ async function loadSubjects(course, version) {
     sel.disabled = false;
   }
 }
+
+function showForm() {
+  hide($('#loginPrompt'));
+  show($('#suggestForm'));
+  hide($('#successState'));
+  loadVersions();
+
+  // Restore saved course
+  const savedCourse = localStorage.getItem('exam_course_selected');
+  if (savedCourse) {
+    $('#sugCourse').value = savedCourse;
+  }
+}
+
+function showLoginPrompt() {
+  hide($('#suggestForm'));
+  hide($('#successState'));
+  show($('#loginPrompt'));
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+
+  $('#backBtn').addEventListener('click', () => { window.location.href = 'https://script.google.com/macros/s/AKfycbwWNG4xKO6yGTWTz2Z9oxdOOkGfHsfia7ItUdvAXPSqwe_tlbrhVTgPgXA_64bmFfG1FA/exec?page=index'; });
+
+  // Init account
+  initAccount();
+  initAccountUI();
+
+  // Wait for autoLogin to complete if saved token exists
+  const hadSavedToken = localStorage.getItem(ACCOUNT_KEYS.token) &&
+    localStorage.getItem(ACCOUNT_KEYS.autoLogin) === 'true';
+
+  if (hadSavedToken) {
+    for (let i = 0; i < 60 && !account.loggedIn; i++) {
+      await new Promise(r => setTimeout(r, 50));
+    }
+  }
+
+  // Show form or login prompt
+  if (account.loggedIn) {
+    showForm();
+  } else {
+    showLoginPrompt();
+  }
+
+  // Fallback: if autoLogin completes after the prompt was shown, switch to form
+  if (!account.loggedIn) {
+    const checkInterval = setInterval(() => {
+      if (account.loggedIn) {
+        clearInterval(checkInterval);
+        showForm();
+      }
+    }, 200);
+    setTimeout(() => clearInterval(checkInterval), 10000);
+  }
+
+  // Login button in prompt
+  const loginBtn = $('#suggestLoginBtn');
+  if (loginBtn) {
+    loginBtn.addEventListener('click', openLoginModal);
+  }
+
+  // After login, show form directly (no page reload)
+  window.onLogin = () => { showForm(); };
+
+  // Course change
+  $('#sugCourse').addEventListener('change', (e) => {
+    const course = e.target.value;
+    if (course) {
+      loadSubjects(course, $('#sugVersion').value);
+    } else {
+      const sel = $('#sugSubject');
+      sel.innerHTML = '<option value="">先にコースを選択してください</option>';
+    }
+  });
+
+  // Version change
+  $('#sugVersion').addEventListener('change', (e) => {
+    const course = $('#sugCourse').value;
+    if (course) {
+      loadSubjects(course, e.target.value);
+    }
+  });
+
+  // Type toggle
+  document.querySelectorAll('input[name="sugType"]').forEach(radio => {
+    radio.addEventListener('change', toggleTypeFields);
+  });
+
+  // Form submit
+  $('#suggestForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const type = document.querySelector('input[name="sugType"]:checked').value;
+    const version = $('#sugVersion').value;
+    const course = $('#sugCourse').value;
+    const subject = $('#sugSubject').value;
+    const date = $('#sugDate').value.trim();
+    const period = $('#sugPeriod').value.trim();
+    const scope = $('#sugScope').value.trim();
+    const notes = type === 'submission' ? $('#sugSubNotes').value.trim() : $('#sugNotes').value.trim();
+
+    if (!version || !course || !subject) {
+      show($('#errorBox'));
+      $('#errorMessage').textContent = '定期テスト、コース、教科は必須です';
+      return;
+    }
+    if (type === 'submission' && !notes) {
+      show($('#errorBox'));
+      $('#errorMessage').textContent = '提出物の詳細を入力してください';
+      return;
+    }
+
+    hide($('#errorBox'));
+    show($('#loading'));
+    hide($('#suggestForm'));
+
+    try {
+      const res = await apiPost({
+        action: 'addSuggestion',
+        data: { type, version, course, subject, date, period, scope, notes }
+      });
+
+      if (!res.success) throw new Error(res.error);
+
+      show($('#successState'));
+
+    } catch (err) {
+      hide($('#loading'));
+      show($('#suggestForm'));
+      show($('#errorBox'));
+      $('#errorMessage').textContent = '送信に失敗しました: ' + err.message;
+    }
+  });
+});
 </script>

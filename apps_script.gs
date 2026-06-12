@@ -20,7 +20,10 @@ const SHEETS = {
   config: 'config',
   subjects: 'subjects',
   schedule: 'schedule',
-  suggestions: 'suggestions'
+  suggestions: 'suggestions',
+  submissions: 'submissions',
+  users: 'users',
+  tokens: 'tokens'
 };
 
 function getSheet(name) {
@@ -38,6 +41,12 @@ function getSheet(name) {
       sheet.appendRow(['version', 'course', 'subject', 'date', 'period', 'scope', 'notes', 'color']);
     } else if (name === SHEETS.suggestions) {
       sheet.appendRow(['id', 'version', 'course', 'subject', 'type', 'date', 'period', 'scope', 'notes', 'reason', 'status', 'createdAt']);
+    } else if (name === SHEETS.submissions) {
+      sheet.appendRow(['version', 'course', 'subject', 'notes', 'color']);
+    } else if (name === SHEETS.users) {
+      sheet.appendRow(['userId', 'email', 'passwordHash', 'displayName', 'savedData', 'createdAt', 'updatedAt', 'resetToken', 'resetTokenExpiry', 'role']);
+    } else if (name === SHEETS.tokens) {
+      sheet.appendRow(['token', 'userId', 'createdAt', 'lastActiveAt']);
     }
   }
   return sheet;
@@ -66,6 +75,11 @@ function include(filename) {
 // ---- GET handlers ----
 function doGet(e) {
   try {
+    // Serve PWA manifest
+    if (e.parameter.manifest === '1') {
+      return serveManifest();
+    }
+
     const action = e.parameter.action;
     if (action) {
       let result;
@@ -82,6 +96,9 @@ function doGet(e) {
         case 'getSuggestions':
           result = getSuggestionsData();
           break;
+        case 'getSubmissions':
+          result = getSubmissions(e.parameter.version, e.parameter.course);
+          break;
         case 'getVersions':
           result = getVersions();
           break;
@@ -91,17 +108,46 @@ function doGet(e) {
       return outputJson({ success: true, data: result });
     }
     const page = e.parameter.page || 'index';
-    return servePage(page);
+    const resetToken = e.parameter.resetToken || '';
+    return servePage(page, resetToken);
   } catch (err) {
     return outputJson({ success: false, error: err.toString() });
   }
 }
 
+// ---- PWA Manifest ----
+function serveManifest() {
+  var iconUrl = 'https://drive.google.com/thumbnail?id=1Gm9vT1ndaRkRFun0H5ZPmsCFuuTPlyK8&sz=w512';
+  var manifest = {
+    name: '範囲表',
+    short_name: '範囲表',
+    display: 'standalone',
+    start_url: '.',
+    background_color: '#ffffff',
+    theme_color: '#4f8cff',
+    icons: [
+      {
+        src: iconUrl,
+        sizes: '192x192',
+        type: 'image/png'
+      },
+      {
+        src: iconUrl,
+        sizes: '512x512',
+        type: 'image/png'
+      }
+    ]
+  };
+  return ContentService.createTextOutput(JSON.stringify(manifest))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 // ---- HTML serving ----
-function servePage(page) {
+function servePage(page, resetToken) {
   const name = page === 'suggest' ? 'Page_Suggest' : page === 'admin' ? 'Page_Admin' : 'Page_Index';
-  return HtmlService.createTemplateFromFile(name)
-    .evaluate()
+  const tpl = HtmlService.createTemplateFromFile(name);
+  tpl.resetToken = resetToken || '';
+  return tpl.evaluate()
     .addMetaTag('viewport', 'width=device-width, initial-scale=1.0')
     .setTitle(
       page === 'suggest' ? '変更点を提案 - テスト範囲表' :
@@ -113,39 +159,99 @@ function servePage(page) {
 // ---- POST handlers ----
 function doPost(e) {
   try {
-    const params = JSON.parse(e.postData.contents);
-    const action = params.action;
+    let params, action;
+    try {
+      params = JSON.parse(e.postData.contents);
+      action = params.action;
+    } catch (jsonErr) {
+      params = e.parameter;
+      action = params.action;
+    }
     let result;
     switch (action) {
+      case 'getConfig':
+        result = getConfig();
+        break;
+      case 'getSchedule':
+        result = getSchedule(params.version, params.course);
+        break;
+      case 'getSubjects':
+        result = getSubjects(params.course, params.version);
+        break;
+      case 'getSuggestions':
+        result = getSuggestionsData();
+        break;
+      case 'getVersions':
+        result = getVersions();
+        break;
       case 'addSuggestion':
-        result = addSuggestion(params.data);
+        result = addSuggestion(params.data, params.token);
+        break;
+      case 'register':
+        result = registerUser(params.email, params.password, params.displayName, params.savedData);
+        break;
+      case 'login':
+        result = loginUser(params.email, params.password);
+        break;
+      case 'autoLogin':
+        result = autoLogin(params.token);
+        break;
+      case 'save':
+        result = saveUserData(params.token, params.savedData);
+        break;
+      case 'requestPasswordReset':
+        result = requestPasswordReset(params.email);
+        break;
+      case 'resetPassword':
+        result = resetPassword(params.token, params.newPassword);
+        break;
+      case 'checkAdmin':
+        result = checkAdminStatus(params.token);
         break;
       case 'approveSuggestion':
-        result = approveSuggestion(params.id);
+        result = approveSuggestion(params.id, params.token);
         break;
       case 'rejectSuggestion':
-        result = rejectSuggestion(params.id);
+        result = rejectSuggestion(params.id, params.token);
         break;
       case 'updateVersion':
-        result = updateVersion(params.version);
+        result = updateVersion(params.version, params.token);
         break;
       case 'updateSubjects':
-        result = updateSubjects(params.course, params.subjects);
+        result = updateSubjects(params.course, params.subjects, params.token);
         break;
       case 'addScheduleEntry':
-        result = addScheduleEntry(params.data);
+        result = addScheduleEntry(params.data, params.token);
         break;
       case 'updateScheduleEntry':
-        result = updateScheduleEntry(params.rowIndex);
+        result = updateScheduleEntry(params.rowIndex, params.data, params.token);
         break;
       case 'deleteScheduleEntry':
-        result = deleteScheduleEntry(params.rowIndex);
+        result = deleteScheduleEntry(params.rowIndex, params.token);
         break;
       case 'replaceSchedule':
-        result = replaceSchedule(params.version, params.course, params.rows);
+        result = replaceSchedule(params.version, params.course, params.rows, params.token);
+        break;
+      case 'addSubmission':
+        result = addSubmission(params.data, params.token);
+        break;
+      case 'updateSubmission':
+        result = updateSubmission(params.rowIndex, params.data, params.token);
+        break;
+      case 'deleteSubmission':
+        result = deleteSubmission(params.rowIndex, params.token);
+        break;
+      case 'replaceSubmissions':
+        result = replaceSubmissions(params.version, params.course, params.rows, params.token);
         break;
       case 'updateConfig':
-        result = updateConfig(params.key, params.value);
+        result = updateConfig(params.key, params.value, params.token);
+        break;
+      case 'heartbeat':
+        result = heartbeat(params.token);
+        break;
+      case 'getActiveSessions':
+        result = getActiveSessions(params.token);
         break;
       default:
         throw new Error('Unknown action: ' + action);
@@ -236,7 +342,8 @@ function getSubjects(course, version) {
   }));
 }
 
-function updateSubjects(course, subjects) {
+function updateSubjects(course, subjects, token) {
+  requireAdmin(token);
   const sheet = getSheet(SHEETS.subjects);
   const existing = sheetToObjects(sheet);
   const toRemove = existing.filter(r => r.course === course);
@@ -253,10 +360,12 @@ function updateSubjects(course, subjects) {
 }
 
 // ---- Suggestions ----
-function addSuggestion(data) {
+function addSuggestion(data, token) {
+  requireAuth(token);
   const sheet = getSheet(SHEETS.suggestions);
-  const rows = sheet.getDataRange().getValues();
-  const nextId = rows.length;
+  const existing = sheetToObjects(sheet);
+  const maxId = existing.reduce((max, r) => Math.max(max, parseInt(r.id) || 0), 0);
+  const nextId = maxId + 1;
   const now = new Date().toISOString();
   const type = data.type || 'test_scope';
   sheet.appendRow([
@@ -281,7 +390,8 @@ function getSuggestionsData() {
   return sheetToObjects(sheet);
 }
 
-function approveSuggestion(id) {
+function approveSuggestion(id, token) {
+  requireAdmin(token);
   const sheet = getSheet(SHEETS.suggestions);
   const data = sheetToObjects(sheet);
   const target = data.find(r => r.id == id);
@@ -292,36 +402,48 @@ function approveSuggestion(id) {
   const statusCol = 11;
   sheet.getRange(rowIndex, statusCol).setValue('承認済み');
 
-  const schedSheet = getSheet(SHEETS.schedule);
-  const schedData = sheetToObjects(schedSheet);
-  const existing = schedData.findIndex(r =>
-    r.version === target.version &&
-    r.course === target.course &&
-    r.subject === target.subject
-  );
-
-  if (existing >= 0) {
-    const rowNum = existing + 2;
-    schedSheet.getRange(rowNum, 4).setValue(target.date || '');
-    schedSheet.getRange(rowNum, 5).setValue(target.period || '');
-    schedSheet.getRange(rowNum, 6).setValue(target.scope || '');
-    schedSheet.getRange(rowNum, 7).setValue(target.notes || '');
-  } else {
-    schedSheet.appendRow([
+  if (target.type === 'submission') {
+    const subSheet = getSheet(SHEETS.submissions);
+    subSheet.appendRow([
       target.version,
       target.course,
       target.subject,
-      target.date || '',
-      target.period || '',
-      target.scope || '',
       target.notes || '',
       ''
     ]);
+  } else {
+    const schedSheet = getSheet(SHEETS.schedule);
+    const schedData = sheetToObjects(schedSheet);
+    const existing = schedData.findIndex(r =>
+      r.version === target.version &&
+      r.course === target.course &&
+      r.subject === target.subject
+    );
+
+    if (existing >= 0) {
+      const rowNum = existing + 2;
+      schedSheet.getRange(rowNum, 4).setValue(target.date || '');
+      schedSheet.getRange(rowNum, 5).setValue(target.period || '');
+      schedSheet.getRange(rowNum, 6).setValue(target.scope || '');
+      schedSheet.getRange(rowNum, 7).setValue(target.notes || '');
+    } else {
+      schedSheet.appendRow([
+        target.version,
+        target.course,
+        target.subject,
+        target.date || '',
+        target.period || '',
+        target.scope || '',
+        target.notes || '',
+        ''
+      ]);
+    }
   }
   return { id, status: 'approved' };
 }
 
-function rejectSuggestion(id) {
+function rejectSuggestion(id, token) {
+  requireAdmin(token);
   const sheet = getSheet(SHEETS.suggestions);
   const data = sheetToObjects(sheet);
   const target = data.find(r => r.id == id);
@@ -335,7 +457,8 @@ function rejectSuggestion(id) {
 }
 
 // ---- Schedule CRUD (Admin) ----
-function replaceSchedule(version, course, rows) {
+function replaceSchedule(version, course, rows, token) {
+  requireAdmin(token);
   const sheet = getSheet(SHEETS.schedule);
   const allData = sheet.getDataRange().getValues();
   for (let i = allData.length - 1; i >= 1; i--) {
@@ -358,7 +481,8 @@ function replaceSchedule(version, course, rows) {
   return { inserted: rows.length };
 }
 
-function addScheduleEntry(data) {
+function addScheduleEntry(data, token) {
+  requireAdmin(token);
   const sheet = getSheet(SHEETS.schedule);
   sheet.appendRow([
     data.version,
@@ -373,22 +497,104 @@ function addScheduleEntry(data) {
   return { success: true };
 }
 
-function updateScheduleEntry(rowIndex) {
+function updateScheduleEntry(rowIndex, data, token) {
+  requireAdmin(token);
   const sheet = getSheet(SHEETS.schedule);
-  const data = sheetToObjects(sheet);
-  const target = data.find(r => r._rowIndex == rowIndex);
-  if (!target) throw new Error('エントリが見つかりません');
+  if (rowIndex < 2 || rowIndex > sheet.getLastRow()) throw new Error('不正な行番号です');
+  const row = sheet.getRange(rowIndex, 1, 1, 8);
+  const current = row.getValues()[0];
+  row.setValues([[
+    data.version ?? current[0],
+    data.course ?? current[1],
+    data.subject ?? current[2],
+    data.date ?? current[3],
+    data.period ?? current[4],
+    data.scope ?? current[5],
+    data.notes ?? current[6],
+    data.color ?? current[7]
+  ]]);
   return { success: true };
 }
 
-function deleteScheduleEntry(rowIndex) {
+function deleteScheduleEntry(rowIndex, token) {
+  requireAdmin(token);
   const sheet = getSheet(SHEETS.schedule);
   if (rowIndex < 2 || rowIndex > sheet.getLastRow()) throw new Error('不正な行番号です');
   sheet.deleteRow(rowIndex);
   return { success: true };
 }
 
-function updateVersion(version) {
+// ---- Submissions CRUD ----
+function getSubmissions(version, course) {
+  const sheet = getSheet(SHEETS.submissions);
+  const data = sheetToObjects(sheet);
+  return data.filter(row => {
+    if (version && row.version !== version) return false;
+    if (course && row.course !== course) return false;
+    return true;
+  });
+}
+
+function addSubmission(data, token) {
+  requireAdmin(token);
+  const sheet = getSheet(SHEETS.submissions);
+  sheet.appendRow([
+    data.version,
+    data.course,
+    data.subject,
+    data.notes || '',
+    data.color || '#3B82F6'
+  ]);
+  return { success: true };
+}
+
+function updateSubmission(rowIndex, data, token) {
+  requireAdmin(token);
+  const sheet = getSheet(SHEETS.submissions);
+  if (rowIndex < 2 || rowIndex > sheet.getLastRow()) throw new Error('不正な行番号です');
+  const row = sheet.getRange(rowIndex, 1, 1, 5);
+  const current = row.getValues()[0];
+  row.setValues([[
+    data.version ?? current[0],
+    data.course ?? current[1],
+    data.subject ?? current[2],
+    data.notes ?? current[3],
+    data.color ?? current[4]
+  ]]);
+  return { success: true };
+}
+
+function deleteSubmission(rowIndex, token) {
+  requireAdmin(token);
+  const sheet = getSheet(SHEETS.submissions);
+  if (rowIndex < 2 || rowIndex > sheet.getLastRow()) throw new Error('不正な行番号です');
+  sheet.deleteRow(rowIndex);
+  return { success: true };
+}
+
+function replaceSubmissions(version, course, rows, token) {
+  requireAdmin(token);
+  const sheet = getSheet(SHEETS.submissions);
+  const allData = sheet.getDataRange().getValues();
+  for (let i = allData.length - 1; i >= 1; i--) {
+    if (allData[i][0] === version && allData[i][1] === course) {
+      sheet.deleteRow(i + 1);
+    }
+  }
+  rows.forEach(r => {
+    sheet.appendRow([
+      version,
+      course,
+      r.subject || '',
+      r.notes || '',
+      r.color || '#3B82F6'
+    ]);
+  });
+  return { inserted: rows.length };
+}
+
+function updateVersion(version, token) {
+  requireAdmin(token);
   const sheet = getSheet(SHEETS.config);
   const data = sheetToObjects(sheet);
   const rowIndex = data.findIndex(r => r.key === 'version');
@@ -400,7 +606,8 @@ function updateVersion(version) {
   return { version };
 }
 
-function updateConfig(key, value) {
+function updateConfig(key, value, token) {
+  requireAdmin(token);
   const sheet = getSheet(SHEETS.config);
   const data = sheetToObjects(sheet);
   const rowIndex = data.findIndex(r => r.key === key);
@@ -410,6 +617,392 @@ function updateConfig(key, value) {
     sheet.appendRow([key, value]);
   }
   return { key, value };
+}
+
+// ---- google.script.run handler ----
+function serverHandler(action, params) {
+  try {
+    let result;
+    switch (action) {
+      case 'getConfig':
+        result = getConfig();
+        break;
+      case 'getSchedule':
+        result = getSchedule(params ? params.version : null, params ? params.course : null);
+        break;
+      case 'getSubjects':
+        result = getSubjects(params ? params.course : null, params ? params.version : null);
+        break;
+      case 'getSuggestions':
+        result = getSuggestionsData();
+        break;
+      case 'getVersions':
+        result = getVersions();
+        break;
+      case 'addSuggestion':
+        result = addSuggestion(params.data, params.token);
+        break;
+      case 'checkAdmin':
+        result = checkAdminStatus(params.token);
+        break;
+      case 'approveSuggestion':
+        result = approveSuggestion(params.id, params.token);
+        break;
+      case 'rejectSuggestion':
+        result = rejectSuggestion(params.id, params.token);
+        break;
+      case 'updateVersion':
+        result = updateVersion(params.version, params.token);
+        break;
+      case 'updateSubjects':
+        result = updateSubjects(params.course, params.subjects, params.token);
+        break;
+      case 'addScheduleEntry':
+        result = addScheduleEntry(params.data, params.token);
+        break;
+      case 'updateScheduleEntry':
+        result = updateScheduleEntry(params.rowIndex, params.data, params.token);
+        break;
+      case 'deleteScheduleEntry':
+        result = deleteScheduleEntry(params.rowIndex, params.token);
+        break;
+      case 'replaceSchedule':
+        result = replaceSchedule(params.version, params.course, params.rows, params.token);
+        break;
+      case 'getSubmissions':
+        result = getSubmissions(params.version, params.course);
+        break;
+      case 'addSubmission':
+        result = addSubmission(params.data, params.token);
+        break;
+      case 'updateSubmission':
+        result = updateSubmission(params.rowIndex, params.data, params.token);
+        break;
+      case 'deleteSubmission':
+        result = deleteSubmission(params.rowIndex, params.token);
+        break;
+      case 'replaceSubmissions':
+        result = replaceSubmissions(params.version, params.course, params.rows, params.token);
+        break;
+      case 'register':
+        result = registerUser(params.email, params.password, params.displayName, params.savedData);
+        break;
+      case 'login':
+        result = loginUser(params.email, params.password);
+        break;
+      case 'autoLogin':
+        result = autoLogin(params.token);
+        break;
+      case 'save':
+        result = saveUserData(params.token, params.savedData);
+        break;
+      case 'requestPasswordReset':
+        result = requestPasswordReset(params.email);
+        break;
+      case 'resetPassword':
+        result = resetPassword(params.token, params.newPassword);
+        break;
+      case 'updateConfig':
+        result = updateConfig(params.key, params.value, params.token);
+        break;
+      case 'heartbeat':
+        result = heartbeat(params.token);
+        break;
+      case 'getActiveSessions':
+        result = getActiveSessions(params.token);
+        break;
+      default:
+        throw new Error('Unknown action: ' + action);
+    }
+    return JSON.stringify({ success: true, data: result });
+  } catch (err) {
+    return JSON.stringify({ success: false, error: err.toString() });
+  }
+}
+
+// ---- Account Management ----
+function hashPassword(password) {
+  var digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    password,
+    Utilities.Charset.UTF_8
+  );
+  return digest.map(function(b) { return ('0' + (b & 0xFF).toString(16)).slice(-2); }).join('');
+}
+
+function generateUserId() {
+  return 'u_' + Utilities.getUuid().replace(/-/g, '').slice(0, 16);
+}
+
+function generateToken() {
+  return 'tok_' + Utilities.getUuid().replace(/-/g, '') + '_' + Math.floor(Date.now() / 1000).toString(36);
+}
+
+function verifyToken(token) {
+  if (!token) return null;
+  var sheet = getSheet(SHEETS.tokens);
+  var data = sheetToObjects(sheet);
+  var row = data.find(function(r) { return r.token === token; });
+  return row ? row.userId : null;
+}
+
+function registerUser(email, password, displayName, savedData) {
+  var sheet = getSheet(SHEETS.users);
+  var data = sheetToObjects(sheet);
+
+  if (data.some(function(u) { return u.email === email; })) {
+    throw new Error('このメールアドレスは既に登録されています');
+  }
+
+  if (!password || password.length < 8) {
+    throw new Error('パスワードは8文字以上必要です');
+  }
+
+  var userId = generateUserId();
+  var passwordHash = hashPassword(password);
+  var now = new Date().toISOString();
+  var savedDataStr = savedData ? JSON.stringify(savedData) : '{}';
+
+  sheet.appendRow([userId, email, passwordHash, displayName, savedDataStr, now, now]);
+
+  var token = generateToken();
+  var tokenSheet = getSheet(SHEETS.tokens);
+  tokenSheet.appendRow([token, userId, now, now]);
+
+  return {
+    success: true,
+    token: token,
+    displayName: displayName,
+    savedData: savedData || {}
+  };
+}
+
+function loginUser(email, password) {
+  var sheet = getSheet(SHEETS.users);
+  var data = sheetToObjects(sheet);
+
+  var user = data.find(function(u) { return u.email === email; });
+  if (!user) {
+    throw new Error('メールアドレスまたはパスワードが正しくありません');
+  }
+
+  var passwordHash = hashPassword(password);
+  if (user.passwordHash !== passwordHash) {
+    throw new Error('メールアドレスまたはパスワードが正しくありません');
+  }
+
+  var token = generateToken();
+  var tokenSheet = getSheet(SHEETS.tokens);
+  tokenSheet.appendRow([token, user.userId, new Date().toISOString(), new Date().toISOString()]);
+
+  var savedData = {};
+  try { savedData = JSON.parse(user.savedData || '{}'); } catch (e) {}
+
+  return {
+    success: true,
+    token: token,
+    displayName: user.displayName,
+    savedData: savedData
+  };
+}
+
+function autoLogin(token) {
+  var userId = verifyToken(token);
+  if (!userId) throw new Error('認証が必要です');
+
+  var sheet = getSheet(SHEETS.users);
+  var data = sheetToObjects(sheet);
+  var user = data.find(function(u) { return u.userId === userId; });
+  if (!user) throw new Error('ユーザーが見つかりません');
+
+  var savedData = {};
+  try { savedData = JSON.parse(user.savedData || '{}'); } catch (e) {}
+
+  return {
+    success: true,
+    displayName: user.displayName,
+    savedData: savedData
+  };
+}
+
+function saveUserData(token, savedData) {
+  var userId = verifyToken(token);
+  if (!userId) throw new Error('認証が必要です');
+
+  var sheet = getSheet(SHEETS.users);
+  var data = sheetToObjects(sheet);
+  var userIndex = data.findIndex(function(u) { return u.userId === userId; });
+  if (userIndex < 0) throw new Error('ユーザーが見つかりません');
+
+  var rowNum = userIndex + 2;
+  var savedDataStr = savedData ? JSON.stringify(savedData) : '{}';
+  var now = new Date().toISOString();
+
+  sheet.getRange(rowNum, 5).setValue(savedDataStr);
+  sheet.getRange(rowNum, 7).setValue(now);
+
+  return { success: true };
+}
+
+// ---- Auth ----
+function requireAuth(token) {
+  var userId = verifyToken(token);
+  if (!userId) throw new Error('ログインが必要です');
+  return userId;
+}
+
+// ---- Admin Auth ----
+function requireAdmin(token) {
+  var userId = verifyToken(token);
+  if (!userId) throw new Error('ログインが必要です');
+
+  var sheet = getSheet(SHEETS.users);
+  var data = sheetToObjects(sheet);
+  var user = data.find(function(u) { return u.userId === userId; });
+  if (!user) throw new Error('ユーザーが見つかりません');
+  if (user.role !== 'admin') throw new Error('管理者権限が必要です');
+
+  return user;
+}
+
+function checkAdminStatus(token) {
+  if (!token) return { isAdmin: false, loggedIn: false };
+  var userId = verifyToken(token);
+  if (!userId) return { isAdmin: false, loggedIn: false };
+
+  var sheet = getSheet(SHEETS.users);
+  var data = sheetToObjects(sheet);
+  var user = data.find(function(u) { return u.userId === userId; });
+  if (!user) return { isAdmin: false, loggedIn: true };
+
+  return { isAdmin: user.role === 'admin', loggedIn: true, displayName: user.displayName };
+}
+
+// ---- Active Sessions ----
+function heartbeat(token) {
+  if (!token) throw new Error('認証が必要です');
+  var sheet = getSheet(SHEETS.tokens);
+  var data = sheetToObjects(sheet);
+  var idx = data.findIndex(function(r) { return r.token === token; });
+  if (idx < 0) throw new Error('トークンが見つかりません');
+  sheet.getRange(idx + 2, 4).setValue(new Date().toISOString());
+  return { success: true };
+}
+
+function getActiveSessions(token) {
+  requireAdmin(token);
+  var tokenSheet = getSheet(SHEETS.tokens);
+  var userSheet = getSheet(SHEETS.users);
+  var tokens = sheetToObjects(tokenSheet);
+  var users = sheetToObjects(userSheet);
+  var now = new Date();
+  var limit = new Date(now.getTime() - 2 * 60 * 1000);
+  var sessions = tokens.map(function(t) {
+    var user = users.find(function(u) { return u.userId === t.userId; });
+    var lastActive = t.lastActiveAt ? new Date(t.lastActiveAt) : null;
+    return {
+      userId: t.userId,
+      email: user ? user.email : '',
+      displayName: user ? (user.displayName || '未設定') : '不明なユーザー',
+      createdAt: t.createdAt || '',
+      lastActiveAt: t.lastActiveAt || '',
+      isActive: lastActive ? (lastActive >= limit) : false
+    };
+  });
+  sessions.sort(function(a, b) {
+    var aTime = a.lastActiveAt ? new Date(a.lastActiveAt).getTime() : 0;
+    var bTime = b.lastActiveAt ? new Date(b.lastActiveAt).getTime() : 0;
+    return bTime - aTime;
+  });
+  return sessions;
+}
+
+// Setup first admin (run this function manually from GAS editor after registering)
+function setupInitialAdmin(email) {
+  var sheet = getSheet(SHEETS.users);
+  var data = sheetToObjects(sheet);
+  var idx = data.findIndex(function(u) { return u.email === email; });
+  if (idx < 0) throw new Error('ユーザーが見つかりません: ' + email);
+  sheet.getRange(idx + 2, 10).setValue('admin');
+  return '管理者権限を付与しました: ' + email;
+}
+
+// ---- Password Reset ----
+function requestPasswordReset(email) {
+  if (!email) throw new Error('メールアドレスを入力してください');
+
+  var sheet = getSheet(SHEETS.users);
+  var data = sheetToObjects(sheet);
+  var userIndex = data.findIndex(function(u) { return u.email === email; });
+
+  // Don't reveal whether the email exists
+  if (userIndex < 0) {
+    return { success: true, message: 'パスワードリセットのメールを送信しました' };
+  }
+
+  var rowNum = userIndex + 2;
+  var resetToken = 'reset_' + Utilities.getUuid().replace(/-/g, '') + '_' + Math.floor(Date.now() / 1000).toString(36);
+  var expiry = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+
+  sheet.getRange(rowNum, 8).setValue(resetToken);  // resetToken column
+  sheet.getRange(rowNum, 9).setValue(expiry);       // resetTokenExpiry column
+
+  var webAppUrl = ScriptApp.getService().getUrl();
+  var resetLink = webAppUrl + '?resetToken=' + encodeURIComponent(resetToken);
+
+  var subject = 'パスワードリセット - テスト範囲表';
+  var body = 'パスワードリセットのリクエストを受け付けました。\n\n'
+    + '以下のリンクをクリックして新しいパスワードを設定してください。\n'
+    + 'このリンクの有効期限は1時間です。\n\n'
+    + resetLink + '\n\n'
+    + '心当たりがない場合はこのメールを無視してください。\n'
+    + '---\n'
+    + 'テスト範囲表';
+
+  MailApp.sendEmail(email, subject, body);
+
+  return { success: true, message: 'パスワードリセットのメールを送信しました' };
+}
+
+function validateResetToken(token) {
+  if (!token) return null;
+
+  var sheet = getSheet(SHEETS.users);
+  var data = sheetToObjects(sheet);
+  var user = data.find(function(u) { return u.resetToken === token; });
+
+  if (!user) return null;
+
+  var expiry = new Date(user.resetTokenExpiry);
+  if (expiry < new Date()) return null;
+
+  return { userId: user.userId, email: user.email };
+}
+
+function resetPassword(token, newPassword) {
+  if (!token) throw new Error('リセットトークンが無効です');
+  if (!newPassword || newPassword.length < 8) throw new Error('パスワードは8文字以上必要です');
+
+  var sheet = getSheet(SHEETS.users);
+  var data = sheetToObjects(sheet);
+  var userIndex = data.findIndex(function(u) { return u.resetToken === token; });
+
+  if (userIndex < 0) throw new Error('リセットトークンが無効です');
+
+  var user = data[userIndex];
+  var expiry = new Date(user.resetTokenExpiry);
+  if (expiry < new Date()) throw new Error('リセットトークンの有効期限が切れています');
+
+  var rowNum = userIndex + 2;
+  var passwordHash = hashPassword(newPassword);
+  var now = new Date().toISOString();
+
+  sheet.getRange(rowNum, 3).setValue(passwordHash);  // passwordHash
+  sheet.getRange(rowNum, 7).setValue(now);            // updatedAt
+  sheet.getRange(rowNum, 8).setValue('');              // clear resetToken
+  sheet.getRange(rowNum, 9).setValue('');              // clear resetTokenExpiry
+
+  return { success: true, message: 'パスワードをリセットしました' };
 }
 
 // ---- Test / Setup helper ----
@@ -473,6 +1066,12 @@ function setupInitialData() {
   if (!sheet) {
     sheet = ss.insertSheet(SHEETS.suggestions);
     sheet.appendRow(['id', 'version', 'course', 'subject', 'type', 'date', 'period', 'scope', 'notes', 'reason', 'status', 'createdAt']);
+  }
+
+  sheet = ss.getSheetByName(SHEETS.submissions);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEETS.submissions);
+    sheet.appendRow(['version', 'course', 'subject', 'notes', 'color']);
   }
 
   return '初期データを作成しました';

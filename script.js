@@ -9,13 +9,334 @@ const STORAGE_KEYS = {
 };
 
 /* ============================================================
+   Account
+   ============================================================ */
+const ACCOUNT_KEYS = {
+  token: 'exam_account_token',
+  email: 'exam_account_email',
+  displayName: 'exam_account_displayName',
+  autoLogin: 'exam_account_autoLogin'
+};
+
+let account = {
+  loggedIn: false,
+  token: null,
+  email: null,
+  displayName: null,
+  autoLogin: false,
+  resetToken: null
+};
+
+function initAccount() {
+  const autoLogin = localStorage.getItem(ACCOUNT_KEYS.autoLogin) === 'true';
+  account.autoLogin = autoLogin;
+  if (autoLogin) {
+    var token = localStorage.getItem(ACCOUNT_KEYS.token);
+    var email = localStorage.getItem(ACCOUNT_KEYS.email);
+    if (token && email) {
+      account.token = token;
+      account.email = email;
+      autoLoginAccount();
+    }
+  }
+  var urlParams = new URLSearchParams(window.location.search);
+  var resetToken = urlParams.get('resetToken');
+  if (resetToken) {
+    account.resetToken = resetToken;
+    openResetPasswordModal();
+  }
+  updateAccountUI();
+}
+
+async function autoLoginAccount() {
+  try {
+    var res = await apiPost({ action: 'autoLogin', token: account.token });
+    if (res.success) {
+      account.loggedIn = true;
+      account.displayName = res.data.displayName;
+      localStorage.setItem(ACCOUNT_KEYS.displayName, res.data.displayName);
+      updateAccountUI();
+      if (res.data.savedData) restoreSavedData(res.data.savedData);
+    } else {
+      clearAccount();
+    }
+  } catch (err) {
+    account.displayName = localStorage.getItem(ACCOUNT_KEYS.displayName);
+    account.loggedIn = true;
+    updateAccountUI();
+  }
+}
+
+function openLoginModal() {
+  hide($('#registerModal'));
+  show($('#loginModal'));
+}
+
+function openRegisterModal() {
+  hide($('#loginModal'));
+  show($('#registerModal'));
+}
+
+function closeLoginModal() { hide($('#loginModal')); }
+function closeRegisterModal() { hide($('#registerModal')); }
+
+async function handleLogin() {
+  var email = $('#loginEmail').value.trim();
+  var password = $('#loginPassword').value;
+  var autoLoginChecked = $('#loginAuto').checked;
+  if (!email || !password) { showAccountError('loginError', 'メールアドレスとパスワードを入力してください'); return; }
+  hideAccountError('loginError');
+  try {
+    var res = await apiPost({ action: 'login', email: email, password: password });
+    if (res.success) {
+      account.loggedIn = true;
+      account.token = res.data.token;
+      account.email = email;
+      account.displayName = res.data.displayName;
+      account.autoLogin = autoLoginChecked;
+      localStorage.setItem(ACCOUNT_KEYS.token, res.data.token);
+      localStorage.setItem(ACCOUNT_KEYS.email, email);
+      localStorage.setItem(ACCOUNT_KEYS.displayName, res.data.displayName);
+      localStorage.setItem(ACCOUNT_KEYS.autoLogin, autoLoginChecked ? 'true' : 'false');
+      closeLoginModal();
+      updateAccountUI();
+      if (res.data.savedData) restoreSavedData(res.data.savedData);
+      toast('ログインしました');
+    } else {
+      showAccountError('loginError', res.error || 'メールアドレスまたはパスワードが正しくありません');
+    }
+  } catch (err) {
+    showAccountError('loginError', 'サーバーエラーが発生しました');
+  }
+}
+
+async function handleRegister() {
+  var email = $('#regEmail').value.trim();
+  var password = $('#regPassword').value;
+  var displayName = $('#regDisplayName').value.trim();
+  if (!email || !password || !displayName) { showAccountError('regError', '全ての項目を入力してください'); return; }
+  if (password.length < 8) { showAccountError('regError', 'パスワードは8文字以上必要です'); return; }
+  hideAccountError('regError');
+  var savedData = {};
+  for (var i = 0; i < localStorage.length; i++) {
+    var k = localStorage.key(i);
+    if (k && !k.startsWith('exam_account_')) savedData[k] = localStorage.getItem(k);
+  }
+  try {
+    var res = await apiPost({ action: 'register', email: email, password: password, displayName: displayName, savedData: savedData });
+    if (res.success) {
+      account.loggedIn = true;
+      account.token = res.data.token;
+      account.email = email;
+      account.displayName = displayName;
+      account.autoLogin = true;
+      localStorage.setItem(ACCOUNT_KEYS.token, res.data.token);
+      localStorage.setItem(ACCOUNT_KEYS.email, email);
+      localStorage.setItem(ACCOUNT_KEYS.displayName, displayName);
+      localStorage.setItem(ACCOUNT_KEYS.autoLogin, 'true');
+      closeRegisterModal();
+      updateAccountUI();
+      toast('登録しました');
+    } else {
+      showAccountError('regError', res.error || '登録に失敗しました');
+    }
+  } catch (err) {
+    showAccountError('regError', 'サーバーエラーが発生しました');
+  }
+}
+
+function handleLogout() {
+  if (!confirm('ログアウトしますか？')) return;
+  clearAccount();
+  updateAccountUI();
+  toast('ログアウトしました');
+}
+
+function clearAccount() {
+  account.loggedIn = false;
+  account.token = null;
+  account.email = null;
+  account.displayName = null;
+  account.autoLogin = false;
+  localStorage.removeItem(ACCOUNT_KEYS.token);
+  localStorage.removeItem(ACCOUNT_KEYS.email);
+  localStorage.removeItem(ACCOUNT_KEYS.displayName);
+  localStorage.setItem(ACCOUNT_KEYS.autoLogin, 'false');
+}
+
+function restoreSavedData(savedData) {
+  if (!savedData) return;
+  Object.keys(savedData).forEach(function(key) {
+    if (!key.startsWith('exam_account_')) localStorage.setItem(key, savedData[key]);
+  });
+  if (typeof loadData === 'function') loadData();
+}
+
+async function autoSave() {
+  if (!account.loggedIn || !account.token) return;
+  var savedData = {};
+  for (var i = 0; i < localStorage.length; i++) {
+    var k = localStorage.key(i);
+    if (k && !k.startsWith('exam_account_')) savedData[k] = localStorage.getItem(k);
+  }
+  try {
+    await apiPost({ action: 'save', token: account.token, savedData: savedData });
+  } catch (err) {}
+}
+
+function showAccountError(id, msg) {
+  var el = $(id);
+  if (el) { el.textContent = msg; el.classList.remove('hidden'); }
+}
+function hideAccountError(id) {
+  var el = $(id);
+  if (el) el.classList.add('hidden');
+}
+function showAccountSuccess(id, msg) {
+  var el = $(id);
+  if (el) { el.textContent = msg; el.classList.remove('hidden'); }
+}
+function hideAccountSuccess(id) {
+  var el = $(id);
+  if (el) el.classList.add('hidden');
+}
+
+/* ---- Password Reset ---- */
+function openForgotPasswordModal() {
+  hide($('#loginModal'));
+  hide($('#registerModal'));
+  hideAccountError('forgotError');
+  hideAccountSuccess('forgotSuccess');
+  show($('#forgotPasswordModal'));
+}
+
+function closeForgotPasswordModal() { hide($('#forgotPasswordModal')); }
+
+function openResetPasswordModal() {
+  hide($('#loginModal'));
+  hide($('#registerModal'));
+  hideAccountError('resetError');
+  hideAccountSuccess('resetSuccess');
+  show($('#resetPasswordModal'));
+}
+
+function closeResetPasswordModal() { hide($('#resetPasswordModal')); }
+
+async function handleForgotPassword() {
+  var email = $('#forgotEmail').value.trim();
+  if (!email) { showAccountError('forgotError', 'メールアドレスを入力してください'); return; }
+  hideAccountError('forgotError');
+  hideAccountSuccess('forgotSuccess');
+  try {
+    var res = await apiPost({ action: 'requestPasswordReset', email: email });
+    if (res.success) {
+      hideAccountError('forgotError');
+      showAccountSuccess('forgotSuccess', 'リセットメールを送信しました。メールをご確認ください。');
+      setTimeout(closeForgotPasswordModal, 4000);
+    } else {
+      showAccountError('forgotError', res.error || '送信に失敗しました');
+    }
+  } catch (err) {
+    showAccountError('forgotError', 'サーバーエラーが発生しました');
+  }
+}
+
+async function handleResetPassword() {
+  var password = $('#resetPassword').value;
+  var confirm = $('#resetPasswordConfirm').value;
+  if (!password || !confirm) { showAccountError('resetError', '新しいパスワードを入力してください'); return; }
+  if (password.length < 8) { showAccountError('resetError', 'パスワードは8文字以上必要です'); return; }
+  if (password !== confirm) { showAccountError('resetError', 'パスワードが一致しません'); return; }
+  hideAccountError('resetError');
+  try {
+    var res = await apiPost({ action: 'resetPassword', token: account.resetToken, newPassword: password });
+    if (res.success) {
+      showAccountSuccess('resetSuccess', 'パスワードを変更しました。新しいパスワードでログインしてください。');
+      account.resetToken = null;
+      setTimeout(function() { closeResetPasswordModal(); openLoginModal(); }, 3000);
+    } else {
+      showAccountError('resetError', res.error || 'パスワードの変更に失敗しました');
+    }
+  } catch (err) {
+    showAccountError('resetError', 'サーバーエラーが発生しました');
+  }
+}
+
+function getInitial(name) {
+  return name ? name.charAt(0) : '?';
+}
+
+function updateAccountUI() {
+  var container = $('#accountContainer');
+  if (!container) return;
+  if (account.loggedIn) {
+    container.innerHTML =
+      '<div class="account-dropdown">' +
+        '<button class="account-btn" id="accountBtn">' +
+          '<span class="account-avatar">' + escHtml(getInitial(account.displayName)) + '</span>' +
+          '<span class="account-name">' + escHtml(account.displayName) + '</span>' +
+          '<svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>' +
+        '</button>' +
+        '<div class="account-menu hidden" id="accountDropdown">' +
+          '<div class="account-menu-header">' +
+            '<div class="account-menu-name">' + escHtml(account.displayName) + '</div>' +
+            '<div class="account-menu-email">' + escHtml(account.email) + '</div>' +
+          '</div>' +
+          '<div class="account-menu-divider"></div>' +
+          '<button class="account-menu-item" id="logoutBtn">ログアウト</button>' +
+        '</div>' +
+      '</div>';
+    $('#accountBtn').addEventListener('click', function(e) {
+      e.stopPropagation();
+      var dd = $('#accountDropdown');
+      if (dd) dd.classList.toggle('hidden');
+    });
+    document.addEventListener('click', function() {
+      var dd = $('#accountDropdown');
+      if (dd) dd.classList.add('hidden');
+    });
+    $('#logoutBtn').addEventListener('click', handleLogout);
+  } else {
+    container.innerHTML =
+      '<button class="account-btn" id="loginBtn">ログイン</button>' +
+      '<button class="account-btn account-btn-register" id="registerBtn">新規登録</button>';
+    $('#loginBtn').addEventListener('click', openLoginModal);
+    $('#registerBtn').addEventListener('click', openRegisterModal);
+  }
+}
+
+function initAccountUI() {
+  $('#loginSubmitBtn').addEventListener('click', handleLogin);
+  $('#regSubmitBtn').addEventListener('click', handleRegister);
+  $('#loginToRegister').addEventListener('click', openRegisterModal);
+  $('#registerToLogin').addEventListener('click', openLoginModal);
+  $('#forgotPasswordLink').addEventListener('click', openForgotPasswordModal);
+  $('#forgotSubmitBtn').addEventListener('click', handleForgotPassword);
+  $('#forgotToLogin').addEventListener('click', function() { closeForgotPasswordModal(); openLoginModal(); });
+  $('#resetSubmitBtn').addEventListener('click', handleResetPassword);
+  $('#resetToLogin').addEventListener('click', function() { closeResetPasswordModal(); openLoginModal(); });
+  var closeLogin = function(e) { if (e.target === $('#loginModal')) closeLoginModal(); };
+  var closeReg = function(e) { if (e.target === $('#registerModal')) closeRegisterModal(); };
+  var closeForgot = function(e) { if (e.target === $('#forgotPasswordModal')) closeForgotPasswordModal(); };
+  var closeReset = function(e) { if (e.target === $('#resetPasswordModal')) closeResetPasswordModal(); };
+  $('#loginModal').addEventListener('click', closeLogin);
+  $('#registerModal').addEventListener('click', closeReg);
+  $('#forgotPasswordModal').addEventListener('click', closeForgot);
+  $('#resetPasswordModal').addEventListener('click', closeReset);
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { closeLoginModal(); closeRegisterModal(); closeForgotPasswordModal(); closeResetPasswordModal(); }
+  });
+}
+
+/* ============================================================
    State
    ============================================================ */
 let state = {
   course: null,
   config: null,
   schedule: [],
-  subjects: []
+  subjects: [],
+  submissions: []
 };
 
 /* ============================================================
@@ -37,18 +358,32 @@ function toast(msg) {
   setTimeout(() => t.remove(), 2500);
 }
 
-function apiFetch(action, params = {}) {
-  const qs = new URLSearchParams(params).toString();
-  const url = API_BASE_URL + '?action=' + action + (qs ? '&' + qs : '');
-  return fetch(url, { method: 'GET' }).then(r => r.json());
+async function apiFetch(action, params = {}) {
+  const res = await fetch(API_BASE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action, ...params })
+  });
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('サーバーエラー: HTMLが返されました');
+  }
 }
 
-function apiPost(data) {
-  return fetch(API_BASE_URL, {
+async function apiPost(data) {
+  const res = await fetch(API_BASE_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'text/plain' },
     body: JSON.stringify(data)
-  }).then(r => r.json());
+  });
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('サーバーエラー: HTMLが返されました');
+  }
 }
 
 /* ============================================================
@@ -121,15 +456,17 @@ async function loadData() {
     if (!configRes.success) throw new Error(configRes.error);
     state.config = configRes.data;
 
-    const [subjectsRes, scheduleRes] = await Promise.all([
+    const [subjectsRes, scheduleRes, submissionsRes] = await Promise.all([
       apiFetch('getSubjects', { course: state.course, version: configRes.data.version }),
-      apiFetch('getSchedule', { version: configRes.data.version, course: state.course })
+      apiFetch('getSchedule', { version: configRes.data.version, course: state.course }),
+      apiFetch('getSubmissions', { version: configRes.data.version, course: state.course })
     ]);
     if (!subjectsRes.success) throw new Error(subjectsRes.error);
     if (!scheduleRes.success) throw new Error(scheduleRes.error);
 
     state.schedule = scheduleRes.data || [];
     state.subjects = subjectsRes.data;
+    state.submissions = submissionsRes.success ? (submissionsRes.data || []) : [];
 
     // Sort by date then period
     state.schedule.sort((a, b) => {
@@ -144,7 +481,7 @@ async function loadData() {
 
     renderInfo();
     renderSchedule();
-    renderSubjectProgress();
+    renderSubmissions();
     renderCountdown();
     updateProgressUI();
     updateLastUpdated();
@@ -184,23 +521,17 @@ function renderSchedule() {
 
   let lastDate = '';
   state.schedule.forEach(row => {
-    const progressKey = getProgressKey(row);
-    const checked = localStorage.getItem(progressKey) === 'true';
-
-    const tr = document.createElement('tr');
-    if (checked) tr.classList.add('row-completed');
-
     const color = row.color || '#3B82F6';
     const date = row.date || '';
 
-    // Date group header
     if (date && date !== lastDate) {
       lastDate = date;
       const hdr = document.createElement('tr');
-      hdr.innerHTML = `<td class="date-group-header" colspan="6">📅 ${escHtml(date)}</td>`;
+      hdr.innerHTML = `<td class="date-group-header" colspan="5">📅 ${escHtml(date)}</td>`;
       tbody.appendChild(hdr);
     }
 
+    const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>
         <div class="subject-cell">
@@ -212,6 +543,40 @@ function renderSchedule() {
       <td class="period-cell">${escHtml(row.period || '')}</td>
       <td class="scope-cell">${escHtml(row.scope || '').replace(/\n/g, '<br>')}</td>
       <td class="notes-cell">${escHtml(row.notes || '').replace(/\n/g, '<br>')}</td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+}
+
+function renderSubmissions() {
+  const tbody = $('#submissionBody');
+  const emptyState = $('#subEmptyState');
+  tbody.innerHTML = '';
+
+  if (!state.submissions || state.submissions.length === 0) {
+    show(emptyState);
+    return;
+  }
+  hide(emptyState);
+
+  state.submissions.forEach((row, i) => {
+    const progressKey = getSubProgressKey(row, i);
+    const checked = localStorage.getItem(progressKey) === 'true';
+
+    const tr = document.createElement('tr');
+    if (checked) tr.classList.add('row-completed');
+
+    const color = row.color || '#3B82F6';
+
+    tr.innerHTML = `
+      <td>
+        <div class="subject-cell">
+          <span class="subject-dot" style="background:${color}"></span>
+          <span class="subject-name">${escHtml(row.subject)}</span>
+        </div>
+      </td>
+      <td class="scope-cell">${escHtml(row.notes || '').replace(/\n/g, '<br>')}</td>
       <td class="progress-cell">
         <input type="checkbox" ${checked ? 'checked' : ''} data-key="${progressKey}">
       </td>
@@ -222,22 +587,37 @@ function renderSchedule() {
       localStorage.setItem(progressKey, checkbox.checked);
       tr.classList.toggle('row-completed', checkbox.checked);
       updateProgressUI();
-      renderSubjectProgress();
     });
 
     tbody.appendChild(tr);
   });
+  updateSubProgressMini();
+}
+
+function getSubProgressKey(row, index) {
+  const ver = state.config ? state.config.version : 'unknown';
+  const notePart = (row.notes || '').replace(/[^a-zA-Z0-9\u3000-\u9FFF]/g, '').slice(0, 20);
+  return ['exam_sub_progress', ver, state.course, row.subject, notePart || index].filter(Boolean).join('_');
+}
+
+function updateSubProgressMini() {
+  const checkboxes = $$('#submissionBody input[type="checkbox"]');
+  const total = checkboxes.length;
+  const done = [...checkboxes].filter(cb => cb.checked).length;
+  $('#subProgressMini').textContent = done + ' / ' + total;
 }
 
 function updateProgressUI() {
-  const checkboxes = $$('#scheduleBody input[type="checkbox"]');
-  const total = checkboxes.length;
-  const done = [...checkboxes].filter(cb => cb.checked).length;
+  const subBoxes = $$('#submissionBody input[type="checkbox"]');
+  const total = subBoxes.length;
+  const done = [...subBoxes].filter(cb => cb.checked).length;
 
   const text = `${done} / ${total}`;
   $('#topProgressText').textContent = text;
   const pct = total > 0 ? (done / total) * 100 : 0;
   $('#topProgressBar').style.width = pct + '%';
+  updateSubProgressMini();
+  autoSave();
 }
 
 function updateLastUpdated() {
@@ -247,11 +627,6 @@ function updateLastUpdated() {
     hour: '2-digit', minute: '2-digit'
   });
   $('#lastUpdated').textContent = '最終更新: ' + str;
-}
-
-function getProgressKey(row) {
-  const ver = state.config ? state.config.version : 'unknown';
-  return STORAGE_KEYS.progress + ver + '_' + state.course + '_' + row.subject;
 }
 
 function escHtml(str) {
@@ -266,14 +641,13 @@ function escHtml(str) {
    ============================================================ */
 function resetProgress() {
   if (!confirm('全てのチェックボックスをリセットしますか？')) return;
-  const checkboxes = $$('#scheduleBody input[type="checkbox"]');
-  checkboxes.forEach(cb => {
+  const allBoxes = $$('#submissionBody input[type="checkbox"]');
+  allBoxes.forEach(cb => {
     cb.checked = false;
     localStorage.setItem(cb.dataset.key, 'false');
     cb.closest('tr').classList.remove('row-completed');
   });
   updateProgressUI();
-  renderSubjectProgress();
   toast('進捗をリセットしました');
 }
 
@@ -404,49 +778,6 @@ function parseScheduleDate(str) {
   today.setHours(0, 0, 0, 0);
   if (d < today) d.setFullYear(d.getFullYear() + 1);
   return d;
-}
-
-/* ============================================================
-   Per-Subject Progress
-   ============================================================ */
-function renderSubjectProgress() {
-  const container = $('#subjectProgressContainer');
-  if (!state.schedule || state.schedule.length === 0) {
-    container.innerHTML = '';
-    return;
-  }
-
-  const map = {};
-  state.schedule.forEach(row => {
-    const key = row.subject;
-    if (!key) return;
-    if (!map[key]) {
-      map[key] = { subject: key, total: 0, done: 0, color: row.color || '#3B82F6' };
-    }
-    map[key].total++;
-    if (localStorage.getItem(getProgressKey(row)) === 'true') {
-      map[key].done++;
-    }
-  });
-
-  let html = '';
-  Object.values(map).forEach(s => {
-    const pct = s.total > 0 ? Math.round((s.done / s.total) * 100) : 0;
-    html += '<div class="subj-progress-item">'
-      + '<div class="subj-progress-header">'
-      + '<span class="subj-progress-name">'
-      + '<span class="subject-dot" style="background:' + s.color + '"></span>'
-      + escHtml(s.subject)
-      + '</span>'
-      + '<span class="subj-progress-stat">' + s.done + '/' + s.total + ' (' + pct + '%)</span>'
-      + '</div>'
-      + '<div class="progress-bar-wrap">'
-      + '<div class="progress-bar-fill" style="width:' + pct + '%;background:' + s.color + '"></div>'
-      + '</div>'
-      + '</div>';
-  });
-
-  container.innerHTML = html;
 }
 
 /* ============================================================
@@ -650,21 +981,32 @@ function exportCalendar() {
     return;
   }
 
+  const now = new Date();
+  const ds = formatICSDate(now);
+
   let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ExamSchedule//JP\r\n';
 
-  state.schedule.forEach(row => {
+  state.schedule.forEach((row, i) => {
     if (!row.date || !row.subject) return;
     const d = parseICSDate(row.date);
     if (!d) return;
 
-    const period = row.period ? ' ' + row.period : '';
+    const period = row.period || '';
+    const summary = escapeICS(row.subject) + (period ? ' (' + escapeICS(period) + ')' : '');
+
     let desc = '';
-    if (row.scope) desc += '範囲: ' + row.scope.replace(/\n/g, '\\n');
-    if (row.notes) desc += (desc ? '\\n' : '') + '備考: ' + row.notes.replace(/\n/g, '\\n');
+    if (row.scope) desc += '範囲: ' + escapeICS(row.scope.replace(/\n+$/, ''));
+    if (row.notes) desc += (desc ? '\\n' : '') + '備考: ' + escapeICS(row.notes);
+    if (state.course) desc += (desc ? '\\n' : '') + 'コース: ' + escapeICS(state.course);
+
+    const uid = d + '-' + row.subject.replace(/[^a-zA-Z0-9]/g, '') + '-' + i + '@exam';
 
     ics += 'BEGIN:VEVENT\r\n';
-    ics += 'SUMMARY:' + row.subject + ' テスト' + period + '\r\n';
+    ics += 'UID:' + uid + '\r\n';
+    ics += 'DTSTAMP:' + ds + 'T000000Z\r\n';
+    ics += 'SUMMARY:' + summary + '\r\n';
     ics += 'DTSTART;VALUE=DATE:' + d + '\r\n';
+    ics += 'DTEND;VALUE=DATE:' + addDays(d, 1) + '\r\n';
     if (desc) ics += 'DESCRIPTION:' + desc + '\r\n';
     ics += 'END:VEVENT\r\n';
   });
@@ -686,15 +1028,36 @@ function exportCalendar() {
 function parseICSDate(str) {
   const m = str.match(/(\d{1,2})\/(\d{1,2})/);
   if (!m) return null;
-  const d = new Date();
-  d.setMonth(parseInt(m[1]) - 1, parseInt(m[2]));
-  d.setHours(0, 0, 0, 0);
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (d < today) d.setFullYear(d.getFullYear() + 1);
-  return d.getFullYear()
-    + String(d.getMonth() + 1).padStart(2, '0')
-    + String(d.getDate()).padStart(2, '0');
+  const month = parseInt(m[1]) - 1;
+  const day = parseInt(m[2]);
+  let year = today.getFullYear();
+  let d = new Date(year, month, day);
+  d.setHours(0, 0, 0, 0);
+  if (d < new Date(today.getFullYear(), today.getMonth(), today.getDate())) {
+    d = new Date(year + 1, month, day);
+  }
+  return formatICSDate(d);
+}
+
+function escapeICS(str) {
+  if (!str) return '';
+  return str.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+}
+
+function formatICSDate(date) {
+  return date.getFullYear()
+    + String(date.getMonth() + 1).padStart(2, '0')
+    + String(date.getDate()).padStart(2, '0');
+}
+
+function addDays(dateStr, n) {
+  const y = parseInt(dateStr.slice(0, 4));
+  const m = parseInt(dateStr.slice(4, 6)) - 1;
+  const d = parseInt(dateStr.slice(6, 8));
+  const dt = new Date(y, m, d);
+  dt.setDate(dt.getDate() + n);
+  return formatICSDate(dt);
 }
 
 /* ============================================================
@@ -716,12 +1079,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
   initTimer();
   initCourseSelection();
+  initAccount();
+  initAccountUI();
 
-  // GAS対応: .htmlへのリンクを ?page= に自動変換
-  if (window.location.pathname.includes('/macros/')) {
-    document.querySelectorAll('a[href$=".html"]').forEach(a => {
-      const page = a.getAttribute('href').replace('.html', '');
-      a.href = '?page=' + page;
-    });
+  // Auto-show login modal if not logged in
+  const hadSavedToken = localStorage.getItem(ACCOUNT_KEYS.token) &&
+    localStorage.getItem(ACCOUNT_KEYS.autoLogin) === 'true';
+
+  if (hadSavedToken) {
+    let attempts = 0;
+    const checkInterval = setInterval(() => {
+      attempts++;
+      if (account.loggedIn || attempts >= 60) {
+        clearInterval(checkInterval);
+        if (!account.loggedIn) openLoginModal();
+      }
+    }, 100);
+  } else {
+    if (!account.loggedIn) openLoginModal();
   }
+
+  window.addEventListener('beforeunload', function() {
+    if (account.loggedIn && account.token) {
+      var savedData = {};
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && !k.startsWith('exam_account_')) savedData[k] = localStorage.getItem(k);
+      }
+      var payload = JSON.stringify({ action: 'save', token: account.token, savedData: savedData });
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(API_BASE_URL, payload);
+      }
+    }
+  });
+
 });

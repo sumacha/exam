@@ -34,18 +34,32 @@ function toast(msg) {
   setTimeout(() => t.remove(), 2500);
 }
 
-function apiPost(data) {
-  return fetch(API_BASE_URL, {
+async function apiPost(data) {
+  const res = await fetch(API_BASE_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'text/plain' },
     body: JSON.stringify(data)
-  }).then(r => r.json());
+  });
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('サーバーエラー: HTMLが返されました');
+  }
 }
 
-function apiFetch(action, params = {}) {
-  const qs = new URLSearchParams(params).toString();
-  const url = API_BASE_URL + '?action=' + action + (qs ? '&' + qs : '');
-  return fetch(url).then(r => r.json());
+async function apiFetch(action, params = {}) {
+  const res = await fetch(API_BASE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action, ...params })
+  });
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('サーバーエラー: HTMLが返されました');
+  }
 }
 
 /* ============================================================
@@ -59,17 +73,21 @@ async function loadVersions() {
 
     const sel = $('#versionSelect');
     const sel2 = $('#editVersionSelect');
+    const sel3 = $('#subVersionSelect');
     sel.innerHTML = '<option value="">バージョンを選択</option>';
     sel2.innerHTML = '<option value="">バージョンを選択</option>';
+    sel3.innerHTML = '<option value="">バージョンを選択</option>';
 
     state.versions.forEach(v => {
       sel.appendChild(new Option(v, v));
       sel2.appendChild(new Option(v, v));
+      sel3.appendChild(new Option(v, v));
     });
 
     if (state.config && state.config.version) {
       sel.value = state.config.version;
       sel2.value = state.config.version;
+      sel3.value = state.config.version;
     }
     sel.disabled = false;
     $('#updateVersionBtn').disabled = false;
@@ -151,8 +169,8 @@ function renderScheduleEditor() {
       <td><input class="edit-input" type="text" value="${escAttr(row.subject || '')}" data-field="subject"></td>
       <td><input class="edit-input" type="text" value="${escAttr(row.date || '')}" data-field="date" placeholder="6/15(月)"></td>
       <td><input class="edit-input" type="text" value="${escAttr(row.period || '')}" data-field="period" placeholder="1時間目"></td>
-      <td><input class="edit-input" type="text" value="${escAttr(row.scope || '')}" data-field="scope" placeholder="p.10~45"></td>
-      <td><input class="edit-input" type="text" value="${escAttr(row.notes || '')}" data-field="notes"></td>
+      <td><textarea class="edit-input" style="min-height:40px;resize:vertical;" data-field="scope" rows="2" placeholder="p.10~45">${escAttr(row.scope || '')}</textarea></td>
+      <td><textarea class="edit-input" style="min-height:40px;resize:vertical;" data-field="notes" rows="2">${escAttr(row.notes || '')}</textarea></td>
       <td class="row-actions">
         <button class="btn btn-danger btn-sm" data-action="delete" data-index="${i}">削除</button>
       </td>
@@ -233,6 +251,113 @@ function getSubjectColor(subject) {
     '物理': '#06B6D4', '生物': '#EC4899'
   };
   return colors[subject] || '#6B7280';
+}
+
+/* ============================================================
+   Submissions Editor
+   ============================================================ */
+let subState = {
+  data: [],
+  version: '',
+  course: 'K/文系'
+};
+
+async function loadSubmissionsForEdit() {
+  const version = $('#subVersionSelect').value;
+  const course = $('#subCourseSelect').value;
+  if (!version) { toast('バージョンを選択してください'); return; }
+
+  subState.version = version;
+  subState.course = course;
+
+  try {
+    const res = await apiFetch('getSubmissions', { version, course });
+    if (!res.success) throw new Error(res.error);
+    subState.data = (res.data || []).map((row, i) => ({ ...row, _editId: i }));
+    renderSubmissionsEditor();
+  } catch (err) {
+    toast('読み込みに失敗: ' + err.message);
+  }
+}
+
+function renderSubmissionsEditor() {
+  const editor = $('#submissionEditor');
+  if (subState.data.length === 0) {
+    editor.innerHTML = '<div class="empty-state" style="padding:20px;"><p>データがありません。「+ 行を追加」で追加してください</p></div>';
+    return;
+  }
+
+  const data = subState.data;
+  let html = `<table>
+    <thead><tr>
+      <th>教科</th><th>提出物詳細</th><th>操作</th>
+    </tr></thead><tbody>`;
+
+  data.forEach((row, i) => {
+    html += `<tr data-index="${i}">
+      <td><input class="edit-input" type="text" value="${escAttr(row.subject || '')}" data-field="subject"></td>
+      <td><textarea class="edit-input" style="min-height:40px;resize:vertical;" data-field="notes" rows="2">${escAttr(row.notes || '')}</textarea></td>
+      <td class="row-actions">
+        <button class="btn btn-danger btn-sm" data-action="delete" data-index="${i}">削除</button>
+      </td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  editor.innerHTML = html;
+
+  editor.querySelectorAll('[data-action="delete"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.index);
+      subState.data.splice(idx, 1);
+      renderSubmissionsEditor();
+    });
+  });
+}
+
+function addEmptySubRow() {
+  subState.data.push({
+    _editId: Date.now(),
+    version: subState.version,
+    course: subState.course,
+    subject: '',
+    notes: '',
+    color: '#3B82F6'
+  });
+  renderSubmissionsEditor();
+}
+
+async function saveSubmissions() {
+  const version = subState.version;
+  const course = subState.course;
+  if (!version) { toast('バージョンを選択してください'); return; }
+
+  const editor = $('#submissionEditor');
+  const rows = [];
+  editor.querySelectorAll('tr[data-index]').forEach(tr => {
+    const inputs = tr.querySelectorAll('.edit-input');
+    const row = {};
+    inputs.forEach(inp => { row[inp.dataset.field] = inp.value; });
+    if (row.subject && row.subject.trim()) {
+      rows.push({
+        subject: row.subject,
+        notes: row.notes || '',
+        color: getSubjectColor(row.subject)
+      });
+    }
+  });
+
+  try {
+    const res = await apiPost({
+      action: 'replaceSubmissions',
+      version, course, rows
+    });
+    if (!res.success) throw new Error(res.error);
+    toast('保存しました (' + (res.data ? res.data.inserted : rows.length) + '件)');
+    loadSubmissionsForEdit();
+  } catch (err) {
+    toast('保存に失敗しました');
+  }
 }
 
 /* ============================================================
@@ -365,11 +490,66 @@ function escAttr(str) {
 }
 
 /* ============================================================
+   Active Sessions
+   ============================================================ */
+let activeSessionsTimer = null;
+let heartbeatTimer = null;
+
+async function loadActiveSessions() {
+  try {
+    const token = localStorage.getItem('exam_account_token');
+    const res = await apiFetch('getActiveSessions', { token: token });
+    if (!res.success) return;
+    const sessions = res.data || [];
+    const list = $('#sessionList');
+    const count = $('#sessionCount');
+    const indicator = $('#sessionIndicator');
+    if (!list) return;
+    const activeCount = sessions.filter(function(s) { return s.isActive; }).length;
+    if (count) count.textContent = activeCount + ' 人がアクティブ（全 ' + sessions.length + ' セッション）';
+    if (indicator) indicator.style.display = 'inline';
+    if (sessions.length === 0) {
+      list.innerHTML = '<div class="empty-state"><p>アクティブなセッションはありません</p></div>';
+      return;
+    }
+    let html = '<table><thead><tr><th>表示名</th><th>メール</th><th>ログイン日時</th><th>最終アクティブ</th><th>状態</th></tr></thead><tbody>';
+    sessions.forEach(function(s) {
+      var created = s.createdAt ? new Date(s.createdAt).toLocaleString('ja-JP') : '';
+      var lastActive = s.lastActiveAt ? new Date(s.lastActiveAt).toLocaleString('ja-JP') : '';
+      var statusHtml = s.isActive
+        ? '<span style="color:#10B981;font-weight:600;">● オンライン</span>'
+        : '<span style="color:#9CA3AF;">● オフライン</span>';
+      html += '<tr>'
+        + '<td>' + escHtml(s.displayName) + '</td>'
+        + '<td style="font-size:0.8rem;color:var(--gray-400);">' + escHtml(s.email) + '</td>'
+        + '<td style="font-size:0.8rem;">' + created + '</td>'
+        + '<td style="font-size:0.8rem;">' + lastActive + '</td>'
+        + '<td>' + statusHtml + '</td>'
+        + '</tr>';
+    });
+    html += '</tbody></table>';
+    list.innerHTML = html;
+  } catch (err) {
+    // silent
+  }
+}
+
+function startHeartbeat() {
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = setInterval(function() {
+    const token = localStorage.getItem('exam_account_token');
+    if (token) apiFetch('heartbeat', { token: token }).catch(function() {});
+  }, 60000);
+  if (activeSessionsTimer) clearInterval(activeSessionsTimer);
+  activeSessionsTimer = setInterval(loadActiveSessions, 15000);
+}
+
+/* ============================================================
    Init
    ============================================================ */
 document.addEventListener('DOMContentLoaded', () => {
 
-  $('#backBtn').addEventListener('click', () => history.back());
+  $('#backBtn').addEventListener('click', () => { window.location.href = 'https://script.google.com/macros/s/AKfycbwWNG4xKO6yGTWTz2Z9oxdOOkGfHsfia7ItUdvAXPSqwe_tlbrhVTgPgXA_64bmFfG1FA/exec?page=index'; });
 
   $('#updateVersionBtn').addEventListener('click', updateVersion);
   $('#addVersionBtn').addEventListener('click', addNewVersion);
@@ -377,6 +557,10 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#loadScheduleBtn').addEventListener('click', loadScheduleForEdit);
   $('#addEntryBtn').addEventListener('click', addEmptyRow);
   $('#saveScheduleBtn').addEventListener('click', saveSchedule);
+
+  $('#loadSubBtn').addEventListener('click', loadSubmissionsForEdit);
+  $('#addSubEntryBtn').addEventListener('click', addEmptySubRow);
+  $('#saveSubBtn').addEventListener('click', saveSubmissions);
 
   $('#sugTabBar').addEventListener('click', (e) => {
     const btn = e.target.closest('.tab-btn');
@@ -407,4 +591,7 @@ async function initializeAdmin() {
   if (state.config && state.config.version) {
     state.editVersion = state.config.version;
   }
+
+  startHeartbeat();
+  loadActiveSessions();
 }

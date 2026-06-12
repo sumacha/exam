@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>テスト範囲表</title>
+  <link rel="manifest" href="?manifest=1">
+  <link rel="apple-touch-icon" href="https://drive.google.com/thumbnail?id=1Gm9vT1ndaRkRFun0H5ZPmsCFuuTPlyK8&sz=w180">
+  <link rel="icon" href="https://drive.google.com/thumbnail?id=1Gm9vT1ndaRkRFun0H5ZPmsCFuuTPlyK8&sz=w32">
   <?!= include('Style'); ?>
 </head>
 <body>
@@ -15,6 +18,7 @@
         テスト範囲表
       </div>
       <div style="display:flex; align-items:center; gap:4px;">
+        <div class="account-container" id="accountContainer"></div>
         <button class="menu-btn" id="printBtn" aria-label="印刷" title="印刷">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;">
             <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
@@ -60,7 +64,7 @@
     <button class="menu-item" data-action="exportCalendar">
       <span class="menu-icon">📅</span> カレンダーに追加 (.ics)
     </button>
-    <a class="menu-item" href="https://script.google.com/macros/s/AKfycbwWNG4xKO6yGTWTz2Z9oxdOOkGfHsfia7ItUdvAXPSqwe_tlbrhVTgPgXA_64bmFfG1FA/exec?page=suggest">
+    <a class="menu-item" href="https://script.google.com/macros/s/AKfycbwWNG4xKO6yGTWTz2Z9oxdOOkGfHsfia7ItUdvAXPSqwe_tlbrhVTgPgXA_64bmFfG1FA/exec?page=suggest" target="_blank" rel="noopener">
       <span class="menu-icon">💡</span> 変更点を提案
     </a>
   </div>
@@ -106,13 +110,12 @@
 
     <div class="info-card" id="scheduleCard">
       <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
-        <span style="font-size:1rem; font-weight:700; color:var(--text-secondary);">📅 テスト時間割・範囲</span>
+        <span style="font-size:1rem; font-weight:700; color:var(--text-secondary);">📖 テスト範囲</span>
         <div style="display:flex; align-items:center; gap:8px;">
           <button class="calendar-export-btn" id="calendarExportBtn">📅 .ics エクスポート</button>
           <span style="font-size:0.75rem; color:var(--gray-400);" id="lastUpdated"></span>
         </div>
       </div>
-      <div class="subj-progress-grid" id="subjectProgressContainer" style="margin-bottom:16px;"></div>
       <div class="schedule-wrapper">
         <table class="schedule-table" id="scheduleTable">
           <thead>
@@ -122,7 +125,6 @@
               <th>時限</th>
               <th>範囲</th>
               <th>備考</th>
-              <th style="text-align:center; width:48px;">✓</th>
             </tr>
           </thead>
           <tbody id="scheduleBody"></tbody>
@@ -130,7 +132,30 @@
       </div>
       <div class="empty-state hidden" id="emptyState">
         <div class="empty-icon">📭</div>
-        <p>スケジュールデータがありません</p>
+        <p>テスト範囲データがありません</p>
+      </div>
+    </div>
+
+    <div class="info-card" id="submissionCard">
+      <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+        <span style="font-size:1rem; font-weight:700; color:var(--text-secondary);">📝 提出物</span>
+        <div class="sub-progress-mini" id="subProgressMini" style="font-size:0.82rem; color:var(--gray-400);">0 / 0</div>
+      </div>
+      <div class="schedule-wrapper">
+        <table class="schedule-table" id="submissionTable">
+          <thead>
+            <tr>
+              <th style="width:18%;">教科</th>
+              <th style="width:auto;">提出物詳細</th>
+              <th style="width:48px;">✓</th>
+            </tr>
+          </thead>
+          <tbody id="submissionBody"></tbody>
+        </table>
+      </div>
+      <div class="empty-state hidden" id="subEmptyState">
+        <div class="empty-icon">📭</div>
+        <p>提出物データがありません</p>
       </div>
     </div>
 
@@ -210,6 +235,101 @@
     </div>
   </div>
 
+  <!-- Login Modal -->
+  <div class="modal-overlay hidden" id="loginModal">
+    <div class="modal-card account-form">
+      <div class="modal-title">ログイン</div>
+      <div class="modal-subtitle">アカウントにログインしてください</div>
+      <div id="loginError" class="account-error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">メールアドレス</label>
+        <input class="form-input" type="email" id="loginEmail" placeholder="example@mail.com" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">パスワード</label>
+        <input class="form-input" type="password" id="loginPassword" placeholder="パスワード" autocomplete="current-password">
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="loginAuto">
+        <label for="loginAuto">自動ログインする</label>
+      </div>
+      <button class="btn btn-primary btn-full" id="loginSubmitBtn">ログイン</button>
+      <div class="account-forgot-link"><a id="forgotPasswordLink">パスワードをお忘れですか？</a></div>
+      <div class="account-switch">
+        アカウントをお持ちでない方は <a id="loginToRegister">新規登録</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Register Modal -->
+  <div class="modal-overlay hidden" id="registerModal">
+    <div class="modal-card account-form">
+      <div class="modal-title">新規登録</div>
+      <div class="modal-subtitle">アカウントを作成してください</div>
+      <div id="regError" class="account-error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">表示名</label>
+        <input class="form-input" type="text" id="regDisplayName" placeholder="表示名" autocomplete="name">
+      </div>
+      <div class="form-group">
+        <label class="form-label">メールアドレス</label>
+        <input class="form-input" type="email" id="regEmail" placeholder="example@mail.com" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">パスワード <span class="required">*</span></label>
+        <input class="form-input" type="password" id="regPassword" placeholder="8文字以上" autocomplete="new-password">
+        <div class="form-hint">8文字以上で入力してください</div>
+      </div>
+      <button class="btn btn-primary btn-full" id="regSubmitBtn">登録</button>
+      <div class="account-switch">
+        すでにアカウントをお持ちの方は <a id="registerToLogin">ログイン</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Forgot Password Modal -->
+  <div class="modal-overlay hidden password-modal" id="forgotPasswordModal">
+    <div class="modal-card account-form">
+      <div class="modal-title">パスワードリセット</div>
+      <div class="modal-subtitle">登録したメールアドレスを入力してください</div>
+      <div id="forgotError" class="account-error hidden"></div>
+      <div id="forgotSuccess" class="account-success hidden"></div>
+      <div class="form-group">
+        <label class="form-label">メールアドレス</label>
+        <input class="form-input" type="email" id="forgotEmail" placeholder="example@mail.com" autocomplete="username">
+      </div>
+      <button class="btn btn-primary btn-full" id="forgotSubmitBtn">リセットメールを送信</button>
+      <div class="account-switch">
+        <a id="forgotToLogin">ログインに戻る</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reset Password Modal -->
+  <div class="modal-overlay hidden password-modal" id="resetPasswordModal">
+    <div class="modal-card account-form">
+      <div class="modal-title">新しいパスワード</div>
+      <div class="modal-subtitle">新しいパスワードを設定してください</div>
+      <div id="resetError" class="account-error hidden"></div>
+      <div id="resetSuccess" class="account-success hidden"></div>
+      <div class="form-group">
+        <label class="form-label">新しいパスワード <span class="required">*</span></label>
+        <input class="form-input" type="password" id="resetPassword" placeholder="8文字以上" autocomplete="new-password">
+        <div class="form-hint">8文字以上で入力してください</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">新しいパスワード（確認） <span class="required">*</span></label>
+        <input class="form-input" type="password" id="resetPasswordConfirm" placeholder="もう一度入力" autocomplete="new-password">
+      </div>
+      <button class="btn btn-primary btn-full" id="resetSubmitBtn">パスワードを変更</button>
+      <div class="account-switch">
+        <a id="resetToLogin">ログインに戻る</a>
+      </div>
+    </div>
+  </div>
+
+  <script>var RESET_TOKEN = '<?= resetToken ?>';</script>
+  <?!= include('AccountJs'); ?>
   <?!= include('ScriptJs'); ?>
 </body>
 </html>

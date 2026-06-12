@@ -2,7 +2,11 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>管理者画面 - テスト範囲表</title>
+  <link rel="manifest" href="?manifest=1">
+  <link rel="apple-touch-icon" href="https://drive.google.com/thumbnail?id=1Gm9vT1ndaRkRFun0H5ZPmsCFuuTPlyK8&sz=w180">
+  <link rel="icon" href="https://drive.google.com/thumbnail?id=1Gm9vT1ndaRkRFun0H5ZPmsCFuuTPlyK8&sz=w32">
   <?!= include('Style'); ?>
 </head>
 <body>
@@ -15,7 +19,8 @@
         管理者画面
       </div>
       <div style="display:flex; align-items:center; gap:4px;">
-        <a class="menu-btn" href="https://script.google.com/macros/s/AKfycbwWNG4xKO6yGTWTz2Z9oxdOOkGfHsfia7ItUdvAXPSqwe_tlbrhVTgPgXA_64bmFfG1FA/exec?page=index" aria-label="トップ" title="トップに戻る" style="text-decoration:none; font-size:0.85rem; color:var(--gray-500); padding:6px 10px;">
+        <div class="account-container" id="accountContainer"></div>
+        <a class="menu-btn" id="topLink" href="https://script.google.com/macros/s/AKfycbwWNG4xKO6yGTWTz2Z9oxdOOkGfHsfia7ItUdvAXPSqwe_tlbrhVTgPgXA_64bmFfG1FA/exec?page=index" aria-label="トップ" title="トップに戻る" style="text-decoration:none; font-size:0.85rem; color:var(--gray-500); padding:6px 10px;">
           📋 トップ
         </a>
         <button class="menu-btn" id="backBtn" aria-label="戻る">
@@ -70,6 +75,29 @@
         </div>
       </div>
 
+      <!-- Submissions Editor -->
+      <div class="admin-card">
+        <h3>📝 提出物エディタ</h3>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; align-items:center;">
+          <select class="form-select" id="subVersionSelect" style="width:auto; min-width:180px;">
+            <option value="">バージョン</option>
+          </select>
+          <select class="form-select" id="subCourseSelect" style="width:auto; min-width:180px;">
+            <option value="K/文系">K/文系</option>
+            <option value="K/理系（物理）">K/理系（物理）</option>
+            <option value="K/理系（生物）">K/理系（生物）</option>
+            <option value="SS/理系（物理）">SS/理系（物理）</option>
+            <option value="SS/理系（生物）">SS/理系（生物）</option>
+          </select>
+          <button class="btn btn-primary btn-sm" id="loadSubBtn">読み込み</button>
+          <button class="btn btn-outline btn-sm" id="addSubEntryBtn">+ 行を追加</button>
+          <button class="btn btn-success btn-sm" id="saveSubBtn">💾 保存</button>
+        </div>
+        <div class="schedule-editor" id="submissionEditor">
+          <div class="empty-state"><p>「読み込み」ボタンでデータを取得してください</p></div>
+        </div>
+      </div>
+
       <!-- Suggestions -->
       <div class="admin-card">
         <h3>💡 提案一覧</h3>
@@ -84,10 +112,49 @@
         </div>
         <div id="suggestionList"></div>
       </div>
+
+      <!-- Active Sessions -->
+      <div class="admin-card">
+        <h3>👥 アクティブセッション</h3>
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+          <span id="sessionCount" style="font-size:0.85rem; color:var(--gray-500);">読み込み中...</span>
+          <span id="sessionIndicator" style="display:none; font-size:0.75rem; color:var(--gray-400);">● 自動更新中</span>
+        </div>
+        <div id="sessionList">
+          <div class="empty-state"><p>データを取得中...</p></div>
+        </div>
+      </div>
     </div>
 
   </main>
 
+  <!-- Auth Loading -->
+  <div class="loading" id="authLoading" style="position:fixed; top:0; left:0; right:0; bottom:0; background:var(--bg); z-index:999; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+    <div class="spinner"></div>
+    <p style="margin-top:12px;">認証確認中...</p>
+  </div>
+
+  <!-- Not Admin Overlay -->
+  <div class="modal-overlay hidden" id="notAdminOverlay" style="z-index:1000;">
+    <div class="modal-card account-form" style="text-align:center;">
+      <div class="modal-title">🔒 管理者認証</div>
+      <div id="authMessage" class="account-error"></div>
+      <div class="form-group">
+        <label class="form-label">メールアドレス</label>
+        <input class="form-input" type="email" id="adminLoginEmail" placeholder="example@mail.com" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">パスワード</label>
+        <input class="form-input" type="password" id="adminLoginPassword" placeholder="パスワード" autocomplete="current-password">
+      </div>
+      <button class="btn btn-primary btn-full" id="adminLoginSubmitBtn">ログイン</button>
+      <div class="account-switch" style="margin-top:12px;">
+        アカウントをお持ちでない方は <a href="https://script.google.com/macros/s/AKfycbwWNG4xKO6yGTWTz2Z9oxdOOkGfHsfia7ItUdvAXPSqwe_tlbrhVTgPgXA_64bmFfG1FA/exec?page=index" target="_blank">トップページで新規登録</a>
+      </div>
+    </div>
+  </div>
+
+  <?!= include('AccountJs'); ?>
   <?!= include('AdminJs'); ?>
 </body>
 </html>

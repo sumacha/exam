@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>変更点を提案 - テスト範囲表</title>
+  <link rel="manifest" href="?manifest=1">
+  <link rel="apple-touch-icon" href="https://drive.google.com/thumbnail?id=1Gm9vT1ndaRkRFun0H5ZPmsCFuuTPlyK8&sz=w180">
+  <link rel="icon" href="https://drive.google.com/thumbnail?id=1Gm9vT1ndaRkRFun0H5ZPmsCFuuTPlyK8&sz=w32">
   <?!= include('Style'); ?>
 </head>
 <body>
@@ -15,6 +18,7 @@
         変更点を提案
       </div>
       <div style="display:flex; align-items:center; gap:4px;">
+        <div class="account-container" id="accountContainer"></div>
         <a class="menu-btn" href="https://script.google.com/macros/s/AKfycbwWNG4xKO6yGTWTz2Z9oxdOOkGfHsfia7ItUdvAXPSqwe_tlbrhVTgPgXA_64bmFfG1FA/exec?page=index" aria-label="トップに戻る" title="トップに戻る" style="text-decoration:none; font-size:0.85rem; color:var(--gray-500); padding:6px 10px;">
           📋 トップ
         </a>
@@ -32,6 +36,12 @@
     <div class="suggest-card">
       <h2>テスト範囲表の修正・追加を提案</h2>
       <p class="desc">範囲表に誤りがあった場合や、追加したい情報がある場合はこちらから提案してください。管理者が確認後、反映されます。</p>
+
+      <div class="empty-state hidden" id="loginPrompt">
+        <div class="empty-icon">🔒</div>
+        <p>提案するにはログインが必要です</p>
+        <button class="btn btn-primary" id="suggestLoginBtn" style="margin-top:12px;">ログイン</button>
+      </div>
 
       <div class="error-box hidden" id="errorBox">
         <span>⚠️</span>
@@ -129,6 +139,100 @@
 
   </main>
 
+  <!-- Login Modal -->
+  <div class="modal-overlay hidden" id="loginModal">
+    <div class="modal-card account-form">
+      <div class="modal-title">ログイン</div>
+      <div class="modal-subtitle">アカウントにログインしてください</div>
+      <div id="loginError" class="account-error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">メールアドレス</label>
+        <input class="form-input" type="email" id="loginEmail" placeholder="example@mail.com" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">パスワード</label>
+        <input class="form-input" type="password" id="loginPassword" placeholder="パスワード" autocomplete="current-password">
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="loginAuto">
+        <label for="loginAuto">自動ログインする</label>
+      </div>
+      <button class="btn btn-primary btn-full" id="loginSubmitBtn">ログイン</button>
+      <div class="account-forgot-link"><a id="forgotPasswordLink">パスワードをお忘れですか？</a></div>
+      <div class="account-switch">
+        アカウントをお持ちでない方は <a id="loginToRegister">新規登録</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Register Modal -->
+  <div class="modal-overlay hidden" id="registerModal">
+    <div class="modal-card account-form">
+      <div class="modal-title">新規登録</div>
+      <div class="modal-subtitle">アカウントを作成してください</div>
+      <div id="regError" class="account-error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">表示名</label>
+        <input class="form-input" type="text" id="regDisplayName" placeholder="表示名" autocomplete="name">
+      </div>
+      <div class="form-group">
+        <label class="form-label">メールアドレス</label>
+        <input class="form-input" type="email" id="regEmail" placeholder="example@mail.com" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">パスワード <span class="required">*</span></label>
+        <input class="form-input" type="password" id="regPassword" placeholder="8文字以上" autocomplete="new-password">
+        <div class="form-hint">8文字以上で入力してください</div>
+      </div>
+      <button class="btn btn-primary btn-full" id="regSubmitBtn">登録</button>
+      <div class="account-switch">
+        すでにアカウントをお持ちの方は <a id="registerToLogin">ログイン</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Forgot Password Modal -->
+  <div class="modal-overlay hidden password-modal" id="forgotPasswordModal">
+    <div class="modal-card account-form">
+      <div class="modal-title">パスワードリセット</div>
+      <div class="modal-subtitle">登録したメールアドレスを入力してください</div>
+      <div id="forgotError" class="account-error hidden"></div>
+      <div id="forgotSuccess" class="account-success hidden"></div>
+      <div class="form-group">
+        <label class="form-label">メールアドレス</label>
+        <input class="form-input" type="email" id="forgotEmail" placeholder="example@mail.com" autocomplete="username">
+      </div>
+      <button class="btn btn-primary btn-full" id="forgotSubmitBtn">リセットメールを送信</button>
+      <div class="account-switch">
+        <a id="forgotToLogin">ログインに戻る</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reset Password Modal -->
+  <div class="modal-overlay hidden password-modal" id="resetPasswordModal">
+    <div class="modal-card account-form">
+      <div class="modal-title">新しいパスワード</div>
+      <div class="modal-subtitle">新しいパスワードを設定してください</div>
+      <div id="resetError" class="account-error hidden"></div>
+      <div id="resetSuccess" class="account-success hidden"></div>
+      <div class="form-group">
+        <label class="form-label">新しいパスワード <span class="required">*</span></label>
+        <input class="form-input" type="password" id="resetPassword" placeholder="8文字以上" autocomplete="new-password">
+        <div class="form-hint">8文字以上で入力してください</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">新しいパスワード（確認） <span class="required">*</span></label>
+        <input class="form-input" type="password" id="resetPasswordConfirm" placeholder="もう一度入力" autocomplete="new-password">
+      </div>
+      <button class="btn btn-primary btn-full" id="resetSubmitBtn">パスワードを変更</button>
+      <div class="account-switch">
+        <a id="resetToLogin">ログインに戻る</a>
+      </div>
+    </div>
+  </div>
+
+  <?!= include('AccountJs'); ?>
   <?!= include('SuggestJs'); ?>
 </body>
 </html>

@@ -1,0 +1,415 @@
+<script>
+/* ============================================================
+   Shared Utilities
+   ============================================================ */
+function $(sel) { return document.querySelector(sel); }
+function $$(sel) { return document.querySelectorAll(sel); }
+function show(el) { if (el) el.classList.remove('hidden'); }
+function hide(el) { if (el) el.classList.add('hidden'); }
+
+function toast(msg) {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+function escAttr(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/* ============================================================
+   API
+   ============================================================ */
+function apiFetch(action, params = {}) {
+  if (account.token) params.token = account.token;
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(data => {
+        try { resolve(JSON.parse(data)); }
+        catch (e) { reject(new Error('サーバーエラー')); }
+      })
+      .withFailureHandler(err => reject(new Error(err.message || 'サーバーエラー')))
+      .serverHandler(action, params);
+  });
+}
+
+function apiPost(data) {
+  return apiFetch(data.action, data);
+}
+
+/* ============================================================
+   Account State
+   ============================================================ */
+const ACCOUNT_KEYS = {
+  token: 'exam_account_token',
+  email: 'exam_account_email',
+  displayName: 'exam_account_displayName',
+  autoLogin: 'exam_account_autoLogin'
+};
+
+let account = {
+  loggedIn: false,
+  token: null,
+  email: null,
+  displayName: null,
+  autoLogin: false,
+  resetToken: null
+};
+
+/* ============================================================
+   Account Modals
+   ============================================================ */
+function openLoginModal() {
+  hide($('#registerModal'));
+  hide($('#forgotPasswordModal'));
+  hide($('#resetPasswordModal'));
+  hideAccountError('loginError');
+  show($('#loginModal'));
+}
+
+function closeLoginModal() { hide($('#loginModal')); }
+
+function openRegisterModal() {
+  hide($('#loginModal'));
+  hide($('#forgotPasswordModal'));
+  hide($('#resetPasswordModal'));
+  hideAccountError('regError');
+  show($('#registerModal'));
+}
+
+function closeRegisterModal() { hide($('#registerModal')); }
+
+function openForgotPasswordModal() {
+  hide($('#loginModal'));
+  hide($('#forgotError'));
+  hide($('#forgotSuccess'));
+  show($('#forgotPasswordModal'));
+}
+
+function closeForgotPasswordModal() { hide($('#forgotPasswordModal')); }
+
+function openResetPasswordModal() {
+  hide($('#loginModal'));
+  hide($('#registerModal'));
+  hideAccountError('resetError');
+  hideAccountSuccess('resetSuccess');
+  show($('#resetPasswordModal'));
+}
+
+function closeResetPasswordModal() { hide($('#resetPasswordModal')); }
+
+/* ============================================================
+   Account UI
+   ============================================================ */
+function getInitial(name) {
+  return name ? name.charAt(0) : '?';
+}
+
+function updateAccountUI() {
+  const container = $('#accountContainer');
+  if (!container) return;
+  if (account.loggedIn) {
+    container.innerHTML =
+      '<div class="account-dropdown">' +
+        '<button class="account-btn" id="accountBtn">' +
+          '<span class="account-avatar">' + escHtml(getInitial(account.displayName)) + '</span>' +
+          '<span class="account-name">' + escHtml(account.displayName) + '</span>' +
+          '<svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>' +
+        '</button>' +
+        '<div class="account-menu hidden" id="accountDropdown">' +
+          '<div class="account-menu-header">' +
+            '<div class="account-menu-name">' + escHtml(account.displayName) + '</div>' +
+            '<div class="account-menu-email">' + escHtml(account.email) + '</div>' +
+          '</div>' +
+          '<div class="account-menu-divider"></div>' +
+          '<button class="account-menu-item" id="logoutBtn">ログアウト</button>' +
+        '</div>' +
+      '</div>';
+    const btn = $('#accountBtn');
+    if (btn) {
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const dd = $('#accountDropdown');
+        if (dd) dd.classList.toggle('hidden');
+      });
+    }
+    document.addEventListener('click', function() {
+      const dd = $('#accountDropdown');
+      if (dd) dd.classList.add('hidden');
+    });
+    const logoutBtn = $('#logoutBtn');
+    if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+  } else {
+    container.innerHTML =
+      '<button class="account-btn" id="loginBtn">ログイン</button>' +
+      '<button class="account-btn account-btn-register" id="registerBtn">新規登録</button>';
+    const loginBtn = $('#loginBtn');
+    if (loginBtn) loginBtn.addEventListener('click', openLoginModal);
+    const regBtn = $('#registerBtn');
+    if (regBtn) regBtn.addEventListener('click', openRegisterModal);
+  }
+}
+
+function showAccountError(id, msg) {
+  const el = $(id);
+  if (el) { el.textContent = msg; el.classList.remove('hidden'); }
+}
+
+function hideAccountError(id) {
+  const el = $(id);
+  if (el) el.classList.add('hidden');
+}
+
+function showAccountSuccess(id, msg) {
+  const el = $(id);
+  if (el) { el.textContent = msg; el.classList.remove('hidden'); }
+}
+
+function hideAccountSuccess(id) {
+  const el = $(id);
+  if (el) el.classList.add('hidden');
+}
+
+/* ============================================================
+   Account Init
+   ============================================================ */
+function initAccount() {
+  const autoLogin = localStorage.getItem(ACCOUNT_KEYS.autoLogin) === 'true';
+  account.autoLogin = autoLogin;
+  if (autoLogin) {
+    const token = localStorage.getItem(ACCOUNT_KEYS.token);
+    const email = localStorage.getItem(ACCOUNT_KEYS.email);
+    if (token && email) {
+      account.token = token;
+      account.email = email;
+      autoLoginAccount();
+    }
+  }
+  if (typeof RESET_TOKEN !== 'undefined' && RESET_TOKEN) {
+    account.resetToken = RESET_TOKEN;
+    openResetPasswordModal();
+  }
+  updateAccountUI();
+}
+
+async function autoLoginAccount() {
+  try {
+    const res = await apiPost({ action: 'autoLogin', token: account.token });
+    if (res.success) {
+      account.loggedIn = true;
+      account.displayName = res.data.displayName;
+      localStorage.setItem(ACCOUNT_KEYS.displayName, res.data.displayName);
+      updateAccountUI();
+      if (res.data.savedData && typeof restoreSavedData === 'function') {
+        restoreSavedData(res.data.savedData);
+      }
+    } else {
+      clearAccount();
+    }
+  } catch (err) {
+    account.displayName = localStorage.getItem(ACCOUNT_KEYS.displayName);
+    account.loggedIn = true;
+    updateAccountUI();
+  }
+}
+
+function clearAccount() {
+  account.loggedIn = false;
+  account.token = null;
+  account.email = null;
+  account.displayName = null;
+  account.autoLogin = false;
+  localStorage.removeItem(ACCOUNT_KEYS.token);
+  localStorage.removeItem(ACCOUNT_KEYS.email);
+  localStorage.removeItem(ACCOUNT_KEYS.displayName);
+  localStorage.setItem(ACCOUNT_KEYS.autoLogin, 'false');
+}
+
+/* ============================================================
+   Login / Register Handlers
+   ============================================================ */
+async function handleLogin() {
+  const email = $('#loginEmail');
+  const password = $('#loginPassword');
+  if (!email || !password) return;
+  const emailVal = email.value.trim();
+  const passwordVal = password.value;
+  const autoLoginChecked = $('#loginAuto') ? $('#loginAuto').checked : false;
+  if (!emailVal || !passwordVal) { showAccountError('loginError', 'メールアドレスとパスワードを入力してください'); return; }
+  hideAccountError('loginError');
+  try {
+    const res = await apiPost({ action: 'login', email: emailVal, password: passwordVal });
+    if (res.success) {
+      account.loggedIn = true;
+      account.token = res.data.token;
+      account.email = emailVal;
+      account.displayName = res.data.displayName;
+      account.autoLogin = autoLoginChecked;
+      localStorage.setItem(ACCOUNT_KEYS.token, res.data.token);
+      localStorage.setItem(ACCOUNT_KEYS.email, emailVal);
+      localStorage.setItem(ACCOUNT_KEYS.displayName, res.data.displayName);
+      localStorage.setItem(ACCOUNT_KEYS.autoLogin, autoLoginChecked ? 'true' : 'false');
+      closeLoginModal();
+      updateAccountUI();
+      if (res.data.savedData && typeof restoreSavedData === 'function') {
+        restoreSavedData(res.data.savedData);
+      }
+      if (typeof onLogin === 'function') onLogin();
+      toast('ログインしました');
+    } else {
+      showAccountError('loginError', res.error || 'メールアドレスまたはパスワードが正しくありません');
+    }
+  } catch (err) {
+    showAccountError('loginError', 'サーバーエラーが発生しました');
+  }
+}
+
+async function handleRegister() {
+  const email = $('#regEmail');
+  const password = $('#regPassword');
+  const displayName = $('#regDisplayName');
+  if (!email || !password || !displayName) return;
+  const emailVal = email.value.trim();
+  const passwordVal = password.value;
+  const displayNameVal = displayName.value.trim();
+  if (!emailVal || !passwordVal || !displayNameVal) { showAccountError('regError', '全ての項目を入力してください'); return; }
+  if (passwordVal.length < 8) { showAccountError('regError', 'パスワードは8文字以上必要です'); return; }
+  hideAccountError('regError');
+  let savedData = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && !k.startsWith('exam_account_')) savedData[k] = localStorage.getItem(k);
+  }
+  try {
+    const res = await apiPost({ action: 'register', email: emailVal, password: passwordVal, displayName: displayNameVal, savedData: savedData });
+    if (res.success) {
+      account.loggedIn = true;
+      account.token = res.data.token;
+      account.email = emailVal;
+      account.displayName = displayNameVal;
+      account.autoLogin = true;
+      localStorage.setItem(ACCOUNT_KEYS.token, res.data.token);
+      localStorage.setItem(ACCOUNT_KEYS.email, emailVal);
+      localStorage.setItem(ACCOUNT_KEYS.displayName, displayNameVal);
+      localStorage.setItem(ACCOUNT_KEYS.autoLogin, 'true');
+      closeRegisterModal();
+      updateAccountUI();
+      if (typeof onLogin === 'function') onLogin();
+      toast('登録しました');
+    } else {
+      showAccountError('regError', res.error || '登録に失敗しました');
+    }
+  } catch (err) {
+    showAccountError('regError', 'サーバーエラーが発生しました');
+  }
+}
+
+function handleLogout() {
+  if (!confirm('ログアウトしますか？')) return;
+  clearAccount();
+  updateAccountUI();
+  toast('ログアウトしました');
+}
+
+function restoreSavedData(savedData) {
+  if (!savedData) return;
+  Object.keys(savedData).forEach(function(key) {
+    if (!key.startsWith('exam_account_')) localStorage.setItem(key, savedData[key]);
+  });
+  if (typeof loadData === 'function') loadData();
+}
+
+/* ============================================================
+   Password Reset Handlers
+   ============================================================ */
+async function handleForgotPassword() {
+  const email = $('#forgotEmail');
+  if (!email) return;
+  const emailVal = email.value.trim();
+  if (!emailVal) { showAccountError('forgotError', 'メールアドレスを入力してください'); return; }
+  hideAccountError('forgotError');
+  hideAccountSuccess('forgotSuccess');
+  try {
+    const res = await apiPost({ action: 'requestPasswordReset', email: emailVal });
+    if (res.success) {
+      hideAccountError('forgotError');
+      showAccountSuccess('forgotSuccess', 'リセットメールを送信しました。メールをご確認ください。');
+      setTimeout(closeForgotPasswordModal, 4000);
+    } else {
+      showAccountError('forgotError', res.error || '送信に失敗しました');
+    }
+  } catch (err) {
+    showAccountError('forgotError', 'サーバーエラーが発生しました');
+  }
+}
+
+async function handleResetPassword() {
+  const password = $('#resetPassword');
+  const confirm = $('#resetPasswordConfirm');
+  if (!password || !confirm) return;
+  const passwordVal = password.value;
+  const confirmVal = confirm.value;
+  if (!passwordVal || !confirmVal) { showAccountError('resetError', '新しいパスワードを入力してください'); return; }
+  if (passwordVal.length < 8) { showAccountError('resetError', 'パスワードは8文字以上必要です'); return; }
+  if (passwordVal !== confirmVal) { showAccountError('resetError', 'パスワードが一致しません'); return; }
+  hideAccountError('resetError');
+  try {
+    const res = await apiPost({ action: 'resetPassword', token: account.resetToken, newPassword: passwordVal });
+    if (res.success) {
+      showAccountSuccess('resetSuccess', 'パスワードを変更しました。新しいパスワードでログインしてください。');
+      account.resetToken = null;
+      setTimeout(function() { closeResetPasswordModal(); openLoginModal(); }, 3000);
+    } else {
+      showAccountError('resetError', res.error || 'パスワードの変更に失敗しました');
+    }
+  } catch (err) {
+    showAccountError('resetError', 'サーバーエラーが発生しました');
+  }
+}
+
+/* ============================================================
+   Init Account UI Events (safe: checks element existence)
+   ============================================================ */
+function initAccountUI() {
+  const bind = (id, event, fn) => { const el = $(id); if (el) el.addEventListener(event, fn); };
+  bind('#loginSubmitBtn', 'click', handleLogin);
+  bind('#regSubmitBtn', 'click', handleRegister);
+  bind('#loginToRegister', 'click', openRegisterModal);
+  bind('#registerToLogin', 'click', openLoginModal);
+  bind('#forgotPasswordLink', 'click', openForgotPasswordModal);
+  bind('#forgotSubmitBtn', 'click', handleForgotPassword);
+  bind('#forgotToLogin', 'click', function() { closeForgotPasswordModal(); openLoginModal(); });
+  bind('#resetSubmitBtn', 'click', handleResetPassword);
+  bind('#resetToLogin', 'click', function() { closeResetPasswordModal(); openLoginModal(); });
+
+  const closeIfBg = (modalId, closeFn) => {
+    const modal = $(modalId);
+    if (modal) modal.addEventListener('click', function(e) { if (e.target === this) closeFn(); });
+  };
+  closeIfBg('#loginModal', closeLoginModal);
+  closeIfBg('#registerModal', closeRegisterModal);
+  closeIfBg('#forgotPasswordModal', closeForgotPasswordModal);
+  closeIfBg('#resetPasswordModal', closeResetPasswordModal);
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      closeLoginModal();
+      closeRegisterModal();
+      closeForgotPasswordModal();
+      closeResetPasswordModal();
+    }
+  });
+}
+</script>

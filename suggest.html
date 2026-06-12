@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>変更点を提案 - テスト範囲表</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="https://drive.google.com/thumbnail?id=1Gm9vT1ndaRkRFun0H5ZPmsCFuuTPlyK8&sz=w180">
+  <link rel="icon" href="https://drive.google.com/thumbnail?id=1Gm9vT1ndaRkRFun0H5ZPmsCFuuTPlyK8&sz=w32">
+  <meta name="theme-color" content="#4f8cff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="範囲表">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -15,11 +21,17 @@
         <span class="icon">💡</span>
         変更点を提案
       </div>
-      <button class="menu-btn" id="backBtn" aria-label="戻る">
+      <div style="display:flex; align-items:center; gap:4px;">
+        <div class="account-container" id="accountContainer"></div>
+        <a class="menu-btn" href="https://script.google.com/macros/s/AKfycbwWNG4xKO6yGTWTz2Z9oxdOOkGfHsfia7ItUdvAXPSqwe_tlbrhVTgPgXA_64bmFfG1FA/exec?page=index" aria-label="トップ" title="トップに戻る" style="text-decoration:none; font-size:0.85rem; color:var(--gray-500); padding:6px 10px;">
+          📋 トップ
+        </a>
+        <button class="menu-btn" id="backBtn" aria-label="戻る">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M19 12H5M12 19l-7-7 7-7"/>
         </svg>
       </button>
+      </div>
     </div>
   </header>
 
@@ -121,11 +133,64 @@
         <div class="empty-icon">✅</div>
         <p>提案を送信しました！</p>
         <p style="font-size:0.85rem; color:var(--gray-400); margin-top:8px;">管理者が確認後、反映されます</p>
-        <button class="btn btn-outline" style="margin-top:16px;" onclick="location.href='index.html'">トップに戻る</button>
+        <button class="btn btn-outline" style="margin-top:16px;" onclick="location.href='https://script.google.com/macros/s/AKfycbwWNG4xKO6yGTWTz2Z9oxdOOkGfHsfia7ItUdvAXPSqwe_tlbrhVTgPgXA_64bmFfG1FA/exec?page=index'">トップに戻る</button>
+        <button class="btn btn-outline" style="margin-top:16px;" onclick="resetSuggestionForm()">別の回答を送信</button>
       </div>
     </div>
 
   </main>
+
+  <!-- Login Modal -->
+  <div class="modal-overlay hidden" id="loginModal">
+    <div class="modal-card account-form">
+      <div class="modal-title">ログイン</div>
+      <div class="modal-subtitle">アカウントにログインしてください</div>
+      <div id="loginError" class="account-error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">メールアドレス</label>
+        <input class="form-input" type="email" id="loginEmail" placeholder="example@mail.com" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">パスワード</label>
+        <input class="form-input" type="password" id="loginPassword" placeholder="パスワード" autocomplete="current-password">
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="loginAuto">
+        <label for="loginAuto">自動ログインする</label>
+      </div>
+      <button class="btn btn-primary btn-full" id="loginSubmitBtn">ログイン</button>
+      <div class="account-forgot-link">パスワードを忘れた場合は管理者にお問い合わせください</div>
+      <div class="account-switch">
+        アカウントをお持ちでない方は <a id="loginToRegister">新規登録</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Register Modal -->
+  <div class="modal-overlay hidden" id="registerModal">
+    <div class="modal-card account-form">
+      <div class="modal-title">新規登録</div>
+      <div class="modal-subtitle">アカウントを作成してください</div>
+      <div id="regError" class="account-error hidden"></div>
+      <div class="form-group">
+        <label class="form-label">表示名</label>
+        <input class="form-input" type="text" id="regDisplayName" placeholder="表示名" autocomplete="name">
+      </div>
+      <div class="form-group">
+        <label class="form-label">メールアドレス</label>
+        <input class="form-input" type="email" id="regEmail" placeholder="example@mail.com" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">パスワード <span class="required">*</span></label>
+        <input class="form-input" type="password" id="regPassword" placeholder="8文字以上" autocomplete="new-password">
+        <div class="form-hint">8文字以上で入力してください</div>
+      </div>
+      <button class="btn btn-primary btn-full" id="regSubmitBtn">登録</button>
+      <div class="account-switch">
+        すでにアカウントをお持ちの方は <a id="registerToLogin">ログイン</a>
+      </div>
+    </div>
+  </div>
 
   <script src="suggest.js"></script>
 </body>
